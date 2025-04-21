@@ -6,3 +6,10 @@ pydantic[email]
 openai
 redis
 python-dotenv
+pgvector
+sqlmodel
+psycopg2-binary
+python-jose[cryptography]
+google-auth
+passlib[bcrypt]
+requests
