@@ -17,3 +17,10 @@ class User(BaseModel):
     updated_at: Optional[str] = None
     is_active: bool = True
 
+class UserProfile(BaseModel):
+    user_id: str
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    country: Optional[str] = None
+    gmat_score: Optional[int] = None
+    goals: Optional[str] = None

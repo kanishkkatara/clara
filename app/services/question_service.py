@@ -1,6 +1,7 @@
 from app.models.question import DifficultyLevel, Exam, Question, Option, QuestionType
+from typing import List
 
-def get_questions(tags: list[str] = None) -> list[Question]:
+def get_questions(tags: List[str] = None) -> List[Question]:
     if tags is None:
         tags = []
     return [
