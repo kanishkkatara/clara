@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Request, Header, Depends
+# src/app/api/chat.py
+
+from typing import Any, Dict, Optional
+from fastapi import APIRouter, Header, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.db import get_db
@@ -8,7 +11,8 @@ router = APIRouter()
 
 class ChatRequest(BaseModel):
     message: str
-    chat_type: str  # "onboarding" or "tutoring"
+    chat_type: str
+    context: Optional[Dict[str, Any]] = None
 
 @router.post("/message")
 async def chat_entry(
@@ -20,6 +24,8 @@ async def chat_entry(
         return await onboarding_bot.handle_onboarding(db, x_user_id, body.message)
 
     elif body.chat_type == "tutoring":
-        return await tutoring_bot.handle_tutoring(db, x_user_id, body.message)
+        return await tutoring_bot.handle_tutoring(
+            db, x_user_id, body.message, body.context
+        )
 
     return {"error": "Invalid chat_type"}
