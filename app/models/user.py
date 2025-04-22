@@ -18,3 +18,5 @@ class User(Base):
                            onupdate=func.now())
 
     profile       = relationship("UserProfile", back_populates="user", uselist=False)
+    memories      = relationship("UserMemory", back_populates="user")
+

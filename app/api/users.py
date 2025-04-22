@@ -44,7 +44,7 @@ def login_via_google(auth: GoogleAuth, db: Session = Depends(get_db)):
     google_id = idinfo["sub"]
     email     = idinfo.get("email")
     name      = idinfo.get("name")
-    picture   = idinfo.get("picture")
+    # picture   = idinfo.get("picture")
 
     user = db.query(User).filter(User.google_id == google_id).first()
     if not user:
