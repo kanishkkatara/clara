@@ -1,8 +1,9 @@
+from uuid import UUID
 from pydantic import BaseModel
 from typing import Optional
 
 class UserRead(BaseModel):
-    id: int
+    id: UUID
     email: str
     name: Optional[str]
     # picture_url: Optional[str]

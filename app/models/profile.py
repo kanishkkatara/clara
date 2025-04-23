@@ -1,11 +1,13 @@
-from sqlalchemy import Column, Integer, String, Boolean, TIMESTAMP, func, ForeignKey
+import uuid
+from sqlalchemy import Column, String, Boolean, TIMESTAMP, func, ForeignKey
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from app.db import Base
 
 class UserProfile(Base):
     __tablename__ = "user_profiles"
 
-    user_id    = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    user_id    = Column(PGUUID(as_uuid=True), ForeignKey("users.id"), primary_key=True, default=uuid.uuid4)
     country    = Column(String, nullable=True)
     exam       = Column(String, nullable=True)
     goals      = Column(String, nullable=True)

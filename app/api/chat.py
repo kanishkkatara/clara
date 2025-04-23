@@ -1,6 +1,7 @@
 # src/app/api/chat.py
 
 from typing import Any, Dict, Optional
+from uuid import UUID
 from fastapi import APIRouter, Header, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -17,7 +18,7 @@ class ChatRequest(BaseModel):
 @router.post("/message")
 async def chat_entry(
     body: ChatRequest,
-    x_user_id: int = Header(...),
+    x_user_id: UUID = Header(...),
     db: Session = Depends(get_db)
 ):
     if body.chat_type == "onboarding":

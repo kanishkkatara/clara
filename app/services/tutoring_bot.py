@@ -1,6 +1,7 @@
 # src/app/services/tutoring_bot.py
 
 from typing import Any, Dict, List, Optional, Union
+from uuid import UUID
 from openai import OpenAI
 import os
 from sqlalchemy.orm import Session
@@ -19,7 +20,7 @@ def get_embedding(text: str) -> List[float]:
 # — Fetch top‑k similar tutoring memories
 def fetch_tutoring_memories(
     db: Session,
-    user_id: int,
+    user_id: UUID,
     query_emb: List[float],
     k: int = 5
 ) -> List[UserMemory]:
@@ -80,7 +81,7 @@ def build_tutoring_prompt(
 # — The restored and enhanced handle_tutoring method
 async def handle_tutoring(
     db: Session,
-    user_id: int,
+    user_id: UUID,
     user_input: str,
     context: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:

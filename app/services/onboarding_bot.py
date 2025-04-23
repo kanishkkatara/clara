@@ -1,4 +1,5 @@
 from typing import List
+from uuid import UUID
 from openai import OpenAI
 import os
 import json
@@ -6,7 +7,6 @@ from sqlalchemy.orm import Session
 from app.models.memory import UserMemory
 from app.models.profile import UserProfile
 from app.models.user import User
-from pgvector.sqlalchemy import Vector
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -19,7 +19,7 @@ def get_embedding(text: str) -> List[float]:
     return response.data[0].embedding
 
 # --- Fetch onboarding memory chronologically
-def fetch_onboarding_memories(db: Session, user_id: int) -> List[UserMemory]:
+def fetch_onboarding_memories(db: Session, user_id: UUID) -> List[UserMemory]:
     return db.query(UserMemory)\
         .filter(UserMemory.user_id == user_id, UserMemory.type == "onboarding")\
         .order_by(UserMemory.id.asc())\
@@ -55,7 +55,7 @@ def build_onboarding_prompt(memories: List[UserMemory], user_input: str):
     return messages
 
 # --- Main handler
-async def handle_onboarding(db: Session, user_id: int, user_input: str):
+async def handle_onboarding(db: Session, user_id: UUID, user_input: str):
     user = db.query(User).filter(User.id == user_id).first()
     profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
 

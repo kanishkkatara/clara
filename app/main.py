@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.db import engine, Base
 import app.api.questions as questions
 import app.api.users as users
-import app.api.onboarding as onboarding
 import app.api.chat as chat
 
 origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
@@ -22,7 +21,6 @@ app.add_middleware(
 # include routers
 app.include_router(questions.router, prefix="/api/questions")
 app.include_router(users.router, prefix="/api/users")
-app.include_router(onboarding.router, prefix="/api/onboarding")
 app.include_router(chat.router, prefix="/api/chat")
 
 # create tables

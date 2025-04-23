@@ -1,12 +1,14 @@
+import uuid
 from sqlalchemy import (
-    Column, Integer, String, Boolean, TIMESTAMP, func, ForeignKey
+    Column, String, Boolean, TIMESTAMP, func
 )
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from app.db import Base
 
 class User(Base):
     __tablename__ = "users"
-    id            = Column(Integer, primary_key=True, index=True)
+    id            = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     google_id     = Column(String, unique=True, index=True, nullable=True)
     email         = Column(String, unique=True, index=True, nullable=False)
     name          = Column(String, nullable=True)
