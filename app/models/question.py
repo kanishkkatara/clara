@@ -1,33 +1,56 @@
-from typing import List, Optional
-from pydantic import BaseModel
-from enum import Enum
+import uuid
+from sqlalchemy import Column, String, Integer, JSON, ARRAY, TIMESTAMP, func
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from app.db import Base
 
-class Exam(str, Enum):
-    GRE = "GRE"
-    GMAT = "GMAT"
+class Question(Base):
+    __tablename__ = "questions"
 
-class QuestionType(str, Enum):
-    RC = "Reading Comprehension"
-    CR = "Critical Reasoning"
-    QUANT = "Quantitative"
-
-class DifficultyLevel(str, Enum):
-    EASY = "Easy"
-    MEDIUM = "Medium"
-    HARD = "Hard"
-
-class Option(BaseModel):
-    id: str
-    text: str
-
-class Question(BaseModel):
-    id: int
-    exam: Exam
-    type: QuestionType
-    tags: List[str] = []
-    difficulty: DifficultyLevel
-
-    prompt: str
-    options: List[Option]
-    correct_option: Optional[str]
-    explanation: Optional[str]
+    id = Column(
+        PGUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        nullable=False,
+        unique=True
+    )
+    type = Column(
+        String,
+        nullable=False,
+        index=True
+    )
+    content = Column(
+        JSON,
+        nullable=False,
+        server_default='[]'
+    )
+    options = Column(
+        JSON,
+        nullable=False,
+        server_default='[]'
+    )
+    answers = Column(
+        JSON,
+        nullable=False,
+        server_default='{}'
+    )
+    tags = Column(
+        ARRAY(String),
+        nullable=False,
+        server_default='{}'
+    )
+    difficulty = Column(
+        Integer,
+        nullable=False,
+        server_default='1'
+    )
+    created_at = Column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=func.now()
+    )
+    updated_at = Column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now()
+    )

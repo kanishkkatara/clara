@@ -1,58 +1,52 @@
-from app.models.question import DifficultyLevel, Exam, Question, Option, QuestionType
-from typing import List
+from typing import List, Dict, Any
+from uuid import UUID
+from sqlalchemy import select
+from app.db import get_db
+from app.models.question import Question
+from app.schemas.question import QuestionCreate
 
-def get_questions(tags: List[str] = None) -> List[Question]:
-    if tags is None:
-        tags = []
-    return [
-        Question(
-            id=1,
-            exam=Exam.GRE,
-            type=QuestionType.RC,
-            tags=tags,
-            difficulty=DifficultyLevel.EASY,
-            prompt="What is the capital of France?",
-            options=[
-                Option(id="A", text="Paris"),
-                Option(id="B", text="London"),
-                Option(id="C", text="Berlin"),
-                Option(id="D", text="Madrid"),
-            ],
-            correct_option="A",
-            explanation="Paris is the capital of France.",
-        ),
-        Question(
-            id=2,
-            exam=Exam.GRE,
-            type=QuestionType.RC,
-            tags=tags,
-            difficulty=DifficultyLevel.MEDIUM,
-            prompt="What is the capital of Germany?",
-            options=[
-                Option(id="A", text="Berlin"),
-                Option(id="B", text="London"),
-                Option(id="C", text="Paris"),
-                Option(id="D", text="Madrid"),
-            ],
-            correct_option="A",
-            explanation="Berlin is the capital of Germany.",
-        ),
-    ]
+class QuestionService:
+    def get_all(
+        self,
+        filters: Dict[str, Any],
+        skip: int = 0,
+        limit: int = 50
+    ) -> List[Question]:
+        db = next(get_db())
+        stmt = select(Question)
+        if filters.get("type"):
+            stmt = stmt.where(Question.type == filters["type"])
+        if filters.get("tags"):
+            stmt = stmt.where(Question.tags.overlap(filters["tags"]))
+        if filters.get("difficulty"):
+            stmt = stmt.where(Question.difficulty == filters["difficulty"])
+        stmt = stmt.offset(skip).limit(limit)
+        result = db.execute(stmt).scalars().all()
+        db.close()
+        return result
 
-def get_question_by_id(question_id: int) -> Question:
-    return Question(
-        id=question_id,
-        exam=Exam.GRE,
-        type=QuestionType.RC,
-        tags=["tag1", "tag2"],
-        difficulty=DifficultyLevel.EASY,
-        prompt="What is the capital of France?",
-        options=[
-            Option(id="A", text="Paris"),
-            Option(id="B", text="London"),
-            Option(id="C", text="Berlin"),
-            Option(id="D", text="Madrid"),
-        ],
-        correct_option="A",
-        explanation="Paris is the capital of France.",
-    )
+    def get_by_id(self, qid: UUID) -> Question:
+        db = next(get_db())
+        question = db.get(Question, qid)
+        db.close()
+        if not question:
+            raise KeyError(f"Question {qid} not found")
+        return question
+
+    def create(self, payload: QuestionCreate) -> Question:
+        db = next(get_db())
+        obj = Question(
+            type=payload.type,
+            content=[block.model_dump() for block in payload.content],
+            options=[opt.model_dump() for opt in payload.options],
+            answers=payload.answers,
+            tags=payload.tags,
+            difficulty=payload.difficulty
+        )
+        db.add(obj)
+        db.commit()
+        db.refresh(obj)
+        db.close()
+        return obj
+
+question_service = QuestionService()
