@@ -18,6 +18,7 @@ class User(Base):
     updated_at    = Column(TIMESTAMP(timezone=True),
                            server_default=func.now(),
                            onupdate=func.now())
+    progress = relationship("UserQuestionProgress", back_populates="user")
 
     profile       = relationship("UserProfile", back_populates="user", uselist=False)
     memories      = relationship("UserMemory", back_populates="user")

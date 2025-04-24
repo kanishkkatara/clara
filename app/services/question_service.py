@@ -1,9 +1,12 @@
-from typing import List, Dict, Any
+# app/services/question_service.py
+
+from typing import List, Dict, Any, Optional
 from uuid import UUID
 from sqlalchemy import select
+
 from app.db import get_db
 from app.models.question import Question
-from app.schemas.question import QuestionCreate
+from app.schemas.question import QuestionCreate, QuestionRead
 
 class QuestionService:
     def get_all(
@@ -22,6 +25,7 @@ class QuestionService:
             stmt = stmt.where(Question.difficulty == filters["difficulty"])
         stmt = stmt.offset(skip).limit(limit)
         result = db.execute(stmt).scalars().all()
+        print("result", result)
         db.close()
         return result
 
@@ -48,5 +52,17 @@ class QuestionService:
         db.refresh(obj)
         db.close()
         return obj
+
+    class NoMoreQuestions(Exception):
+        pass
+
+    def recommend_next(
+        self,
+        user_id: UUID,
+        last_question_id: UUID,
+        session,
+    ) -> Optional[QuestionRead]:
+        # TODO: real logic later
+        return None
 
 question_service = QuestionService()

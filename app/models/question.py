@@ -1,7 +1,8 @@
 import uuid
-from sqlalchemy import Column, String, Integer, JSON, ARRAY, TIMESTAMP, func
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy import Column, String, Integer, JSON, TIMESTAMP, func
+from sqlalchemy.dialects.postgresql import UUID as PGUUID, ARRAY
 from app.db import Base
+from sqlalchemy.orm import relationship
 
 class Question(Base):
     __tablename__ = "questions"
@@ -21,27 +22,27 @@ class Question(Base):
     content = Column(
         JSON,
         nullable=False,
-        server_default='[]'
+        server_default="[]"
     )
     options = Column(
         JSON,
         nullable=False,
-        server_default='[]'
+        server_default="[]"
     )
     answers = Column(
         JSON,
         nullable=False,
-        server_default='{}'
+        server_default="{}"
     )
     tags = Column(
         ARRAY(String),
         nullable=False,
-        server_default='{}'
+        server_default="{}"
     )
     difficulty = Column(
         Integer,
         nullable=False,
-        server_default='1'
+        server_default="1"
     )
     created_at = Column(
         TIMESTAMP(timezone=True),
@@ -54,3 +55,4 @@ class Question(Base):
         server_default=func.now(),
         onupdate=func.now()
     )
+    progress = relationship("UserQuestionProgress", back_populates="question")
