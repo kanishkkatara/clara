@@ -33,6 +33,31 @@ def fetch_tutoring_memories(
           .all()
     )
 
+def extract_text(node):
+    """
+    Given either a string or a dict with:
+      - 'text': a simple string, or
+      - 'blocks': a list of { 'text': ... } paragraphs
+    returns the joined text.
+    """
+    if isinstance(node, str):
+        return node
+    if not isinstance(node, dict):
+        return ""
+    # prefer a top-level 'text' field if present
+    if 'text' in node and isinstance(node['text'], str):
+        return node['text']
+    # otherwise, collect from blocks
+    blocks = node.get('blocks')
+    if isinstance(blocks, list):
+        pieces = []
+        for b in blocks:
+            t = b.get('text')
+            if isinstance(t, str):
+                pieces.append(t)
+        return "\n".join(pieces)
+    return ""
+
 # — Build prompt, injecting question context when provided
 def build_tutoring_prompt(
     memories: List[UserMemory],
@@ -50,22 +75,27 @@ def build_tutoring_prompt(
     is_greet = user_input.strip().lower() in {"hi", "hello", "hey"}
 
     # 3) If question context is provided and not just a greeting, insert it
+
+
     if question and not is_greet:
-        # question may be a string or a dict with text & options
+        # build the prompt
         if isinstance(question, str):
             q_text = question
-            system += f"Current question:\n\"\"\"\n{q_text}\n\"\"\"\n\n"
-        elif isinstance(question, dict):
-            q_text = question.get("text", "")
-            system += f"Current question:\n\"\"\"\n{q_text}\n\"\"\"\n\n"
-            opts = question.get("options")
-            if isinstance(opts, list):
-                system += "Options:\n"
-                for opt in opts:
-                    oid = opt.get("id", "")
-                    otext = opt.get("text", "")
-                    system += f"- {oid}: {otext}\n"
-                system += "\n"
+        else:
+            q_text = extract_text(question)
+
+        system += f"Current question:\n\"\"\"\n{q_text}\n\"\"\"\n\n"
+
+        # now options
+        opts = question.get("options") if isinstance(question, dict) else None
+        if isinstance(opts, list) and opts:
+            system += "Options:\n"
+            for opt in opts:
+                oid = opt.get("id", "")
+                # extract text from the same shape
+                otext = extract_text(opt)
+                system += f"- {oid}: {otext}\n"
+            system += "\n"
 
     # 4) Include past tutoring memory if any
     if memories:

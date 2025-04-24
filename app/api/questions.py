@@ -13,6 +13,7 @@ from app.schemas.question import (
     QuestionRead,
     QuestionSummaryRead,
 )
+from app.services.recommendation_service import recommendation_service
 from app.services.progress_service import progress_service
 from app.services.question_service import question_service
 
@@ -60,10 +61,11 @@ def submit_answer(
     progress_service.record(payload, session=session)
 
     # next‐question stub
-    next_q = question_service.recommend_next(
-        user_id=payload.user_id,
-        last_question_id=q_id,
-        session=session,
-    )
+    next_q = recommendation_service.recommend_next(
+            user_id=payload.user_id,
+            last_question_id=payload.question_id,
+            is_correct=payload.is_correct,
+            session=session,
+        )
 
     return NextQuestionResponse(next_question=next_q)

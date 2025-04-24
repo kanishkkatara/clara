@@ -63,16 +63,4 @@ class QuestionService:
         db.close()
         return obj
 
-    class NoMoreQuestions(Exception):
-        pass
-
-    def recommend_next(
-        self,
-        user_id: UUID,
-        last_question_id: UUID,
-        session,
-    ) -> Optional[QuestionRead]:
-        # TODO: implement recommendation logic
-        return None
-
 question_service = QuestionService()
