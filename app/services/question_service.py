@@ -17,15 +17,25 @@ class QuestionService:
     ) -> List[Question]:
         db = next(get_db())
         stmt = select(Question)
-        if filters.get("type"):
-            stmt = stmt.where(Question.type == filters["type"])
-        if filters.get("tags"):
+
+        # filter by any of the selected types
+        if filters["type"]:
+            stmt = stmt.where(Question.type.in_(filters["type"]))
+
+        # filter if any of the selected tags overlap
+        if filters["tags"]:
             stmt = stmt.where(Question.tags.overlap(filters["tags"]))
-        if filters.get("difficulty"):
-            stmt = stmt.where(Question.difficulty == filters["difficulty"])
+
+        # filter by difficulty range
+        if filters.get("min_difficulty") is not None:
+            stmt = stmt.where(Question.difficulty >= filters["min_difficulty"])
+        if filters.get("max_difficulty") is not None:
+            stmt = stmt.where(Question.difficulty <= filters["max_difficulty"])
+
+        # pagination
         stmt = stmt.offset(skip).limit(limit)
+
         result = db.execute(stmt).scalars().all()
-        print("result", result)
         db.close()
         return result
 
@@ -62,7 +72,7 @@ class QuestionService:
         last_question_id: UUID,
         session,
     ) -> Optional[QuestionRead]:
-        # TODO: real logic later
+        # TODO: implement recommendation logic
         return None
 
 question_service = QuestionService()
