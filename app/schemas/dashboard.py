@@ -20,7 +20,7 @@ class StudyPlanItem(BaseModel):
 class OverallSchema(BaseModel):
     quantitative: int
     verbal: int
-    ir: int
+    di: int
     average: int
 
 class PerformanceDataItem(BaseModel):

@@ -1,4 +1,5 @@
 from typing import List
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.models.progress import UserQuestionProgress
 from app.models.question import Question
@@ -47,16 +48,62 @@ class DashboardService:
         return plan
 
     def get_overall_progress(self) -> OverallSchema:
-        answered = self.session.query(UserQuestionProgress)\
-            .filter_by(user_id=self.user.id).count() or 1
-        correct = self.session.query(UserQuestionProgress)\
-            .filter_by(user_id=self.user.id, is_correct=True).count()
-        pct = int(correct / answered * 100)
+        """
+        Compute percent‐correct per category by filtering on Question.type,
+        then return each percentage along with their average.
+        """
+        user_id = self.user.id
+
+        # Map each dashboard category to the question.type values in it
+        category_type_map = {
+            'quantitative': ['problem-solving'],
+            'verbal': ['reading_comprehension', 'critical_reasoning'],
+            'di': ['data-sufficiency', 'integrated-reasoning'],
+        }
+
+        stats: dict[str, int] = {}
+
+        for category, types in category_type_map.items():        
+            # total available in this category
+            total_cat = (
+                self.session.query(func.count(Question.id))
+                .filter(Question.type.in_(types))
+                .scalar()
+                or 1
+            )
+            # total user has completed in this category
+            completed_cat = (
+                self.session.query(func.count(UserQuestionProgress.id))
+                .join(Question, Question.id == UserQuestionProgress.question_id)
+                .filter(
+                    UserQuestionProgress.user_id == user_id,
+                    Question.type.in_(types)
+                )
+                .scalar()
+                or 0
+            )
+            stats[category] = int(completed_cat / total_cat * 100)
+
+        # Compute an overall average across categories
+                # 1) overall completed / total
+        total_questions = (
+            self.session.query(func.count(Question.id))
+            .scalar()
+            or 1
+        )
+        total_completed = (
+            self.session.query(func.count(UserQuestionProgress.id))
+            .filter(UserQuestionProgress.user_id == user_id)
+            .scalar()
+            or 0
+        )
+        stats['overall'] = int(total_completed / total_questions * 100)
+
         return OverallSchema(
-            quantitative=pct,
-            verbal=0,
-            ir=0,
-            average=pct
+            quantitative=stats.get('quantitative', 0),
+            verbal=stats.get('verbal', 0),
+            di=stats.get('di', 0),
+            average=stats.get('overall', 0)
         )
 
     def get_performance_data(self) -> List[PerformanceDataItem]:
