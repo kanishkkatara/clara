@@ -1,6 +1,7 @@
 from typing import List
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from app.models.profile import UserProfile
 from app.models.progress import UserQuestionProgress
 from app.models.question import Question
 from app.schemas.dashboard import (
@@ -14,13 +15,34 @@ class DashboardService:
         self.user = user
 
     def get_stats(self) -> StatsSchema:
-        total = self.session.query(UserQuestionProgress)\
-            .filter_by(user_id=self.user.id).count()
-        correct = self.session.query(UserQuestionProgress)\
-            .filter_by(user_id=self.user.id, is_correct=True).count()
-        # TODO: derive timeStudied
+        # total questions seen
+        total = (
+            self.session
+                .query(UserQuestionProgress)
+                .filter_by(user_id=self.user.id)
+                .count()
+        )
+
+        # correct answers count (if you ever want it)
+        correct = (
+            self.session
+                .query(UserQuestionProgress)
+                .filter_by(user_id=self.user.id, is_correct=True)
+                .count()
+        )
+
+        # fetch the profile row
+        profile = (
+            self.session
+                .query(UserProfile)
+                .filter_by(user_id=self.user.id)
+                .first()
+        )
+        target_score = profile.target_score if profile else None
+
+        # TODO: derive real timeStudied
         return StatsSchema(
-            targetScore=getattr(self.user, 'target_score', None),
+            targetScore=target_score,
             timeStudied=0.0,
             questionsCompleted=total
         )

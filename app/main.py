@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import dashboard, health, questions, users, chat
+from app.api import dashboard, health, questions, settings, users, chat
 from app.db import engine, Base
 origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
@@ -21,6 +21,7 @@ app.include_router(questions.router, prefix="/api/questions")
 app.include_router(users.router, prefix="/api/users")
 app.include_router(chat.router, prefix="/api/chat")
 app.include_router(dashboard.router, prefix="/api/dashboard")
+app.include_router(settings.router, prefix="/api/settings")
 
 # create tables
 @app.on_event("startup")

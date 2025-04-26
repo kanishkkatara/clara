@@ -1,3 +1,4 @@
+# app/models/user_profile.py
 import uuid
 from sqlalchemy import JSON, Column, Integer, String, Boolean, TIMESTAMP, func, ForeignKey
 from sqlalchemy.orm import relationship
@@ -7,15 +8,29 @@ from app.db import Base
 class UserProfile(Base):
     __tablename__ = "user_profiles"
 
-    user_id           = Column(PGUUID(as_uuid=True), ForeignKey("users.id"), primary_key=True, default=uuid.uuid4)
-    country           = Column(String, nullable=True)
-    exam              = Column(String, nullable=True)
-    target_score      = Column(Integer, nullable=True)
-    exam_date         = Column(String, nullable=True)  # keep as string for now, can parse dates later
-    previous_score    = Column(Integer, nullable=True)
-    weekly_hours      = Column(String, nullable=True)
-    preferred_times   = Column(JSON, nullable=True)   # JSON array like ["Evenings", "Weekends"]
+    user_id             = Column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id"),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    country             = Column(String, nullable=True)
+    exam                = Column(String, nullable=True)
+    target_score        = Column(Integer, nullable=True)
+    exam_date           = Column(String, nullable=True)
+    previous_score      = Column(Integer, nullable=True)
+    weekly_hours        = Column(String, nullable=True)
+    preferred_times     = Column(JSON, nullable=True)
     onboarding_complete = Column(Boolean, nullable=False, default=False)
-    updated_at        = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
+    updated_at          = Column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
-    user              = relationship("User", back_populates="profile")
+    # ─── NEW SETTINGS ─────────────────────────────────────────────────────
+    notify_mail         = Column(Boolean, nullable=False, default=False)
+    notify_whatsapp     = Column(Boolean, nullable=False, default=False)
+
+    user = relationship("User", back_populates="profile")
