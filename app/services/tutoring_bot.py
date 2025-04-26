@@ -142,7 +142,7 @@ async def handle_tutoring(
 
     # D) Call OpenAI
     resp = client.chat.completions.create(
-        model="gpt-4",
+        model="gpt-4.1-nano",
         messages=prompt,
         temperature=0.6
     )

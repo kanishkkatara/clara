@@ -1,13 +1,16 @@
+import re
+import json
+import os
 from typing import List
 from uuid import UUID
 from openai import OpenAI
-import os
-import json
 from sqlalchemy.orm import Session
+
 from app.models.memory import UserMemory
 from app.models.profile import UserProfile
 from app.models.user import User
 
+# Initialize OpenAI client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # --- Generate embeddings
@@ -18,33 +21,67 @@ def get_embedding(text: str) -> List[float]:
     )
     return response.data[0].embedding
 
-# --- Fetch onboarding memory chronologically
+# --- Fetch onboarding memories chronologically
 def fetch_onboarding_memories(db: Session, user_id: UUID) -> List[UserMemory]:
-    return db.query(UserMemory)\
-        .filter(UserMemory.user_id == user_id, UserMemory.type == "onboarding")\
-        .order_by(UserMemory.id.asc())\
-        .all()
+    return (
+        db.query(UserMemory)
+          .filter(
+              UserMemory.user_id == user_id,
+              UserMemory.type == "onboarding"
+          )
+          .order_by(UserMemory.id.asc())
+          .all()
+    )
+
+# --- Extract JSON blob for a given key using regex
+def extract_profile(key: str, text: str):
+    """
+    Looks for a pattern like 'key: { ... }' and returns the parsed JSON dict,
+    or None if not found or if parsing fails.
+    """
+    pattern = re.compile(rf'{re.escape(key)}:\s*(\{{.*?\}})', re.IGNORECASE | re.DOTALL)
+    match = pattern.search(text)
+    if not match:
+        return None
+    json_part = match.group(1)
+    try:
+        return json.loads(json_part)
+    except json.JSONDecodeError as e:
+        print(f"⚠️ Failed to parse {key}: {e}")
+        return None
 
 # --- Build system + chat messages
 def build_onboarding_prompt(memories: List[UserMemory], user_input: str):
-    memory_blocks = "\n".join([f"{m.source.upper()}: {m.message}" for m in memories])
+    memory_blocks = "\n".join(f"{m.source.upper()}: {m.message}" for m in memories)
 
     system = (
         "You are Clara, a friendly and conversational onboarding assistant for a GMAT prep app.\n\n"
         "You're talking to a new user and your job is to get to know them.\n"
-        "During the conversation, collect three fields naturally:\n"
+        "During the conversation, collect the following fields naturally:\n"
         "1. exam (e.g., GMAT, GRE)\n"
         "2. country (where they live)\n"
-        "3. goals (target score or focus areas)\n\n"
-        "Do NOT ask these like a form. Instead:\n"
+        "3. target_score (their score goal)\n"
+        "4. exam_date (when they plan to take the exam, e.g., \"2025-06-15\")\n"
+        "5. previous_score (if any, otherwise explicitly null)\n"
+        "6. weekly_hours (how many hours per week they can study, e.g., \"10-15\")\n"
+        "7. preferred_times (an array of study-time preferences, e.g., [\"Evenings\", \"Weekends\"])\n\n"
+        "Do NOT collect these like a form. Instead:\n"
         "- Ask follow-up questions\n"
         "- Reference earlier replies\n"
         "- Use light humor or empathy\n"
-        "- Do not repeat what's already answered\n\n"
-        "Once you have all 3, end with a friendly summary and include:\n"
-        "final_profile: {\"exam\": \"GMAT\", \"country\": \"India\", \"goals\": \"Target 720, focus on quant\"}\n\n"
-        "If only 1 or 2 are known, continue asking and optionally include:\n"
-        "partial_profile: {\"exam\": \"GMAT\"}\n\n"
+        "- Avoid repeating what's already answered\n\n"
+        "Once you have all of them, end with a friendly summary and include exactly:\n"
+        "final_profile: {"
+        "\"exam\": \"GMAT\", "
+        "\"country\": \"India\", "
+        "\"target_score\": 720, "
+        "\"exam_date\": \"2025-06-15\", "
+        "\"previous_score\": null, "
+        "\"weekly_hours\": \"10-15\", "
+        "\"preferred_times\": [\"Evenings\", \"Weekends\"]"
+        "}\n\n"
+        "If you only have a subset, continue asking and optionally include:\n"
+        "partial_profile: {\"exam\": \"GMAT\", \"country\": \"India\"}\n\n"
         f"Here’s the chat so far:\n{memory_blocks}"
     )
 
@@ -59,27 +96,32 @@ async def handle_onboarding(db: Session, user_id: UUID, user_input: str):
     user = db.query(User).filter(User.id == user_id).first()
     profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
 
-    # ✅ Skip if onboarding already done
-    if profile and getattr(profile, "onboarding_complete", False):
+    # If onboarding is already complete, summarize and exit
+    if profile and profile.onboarding_complete:
+        first_name = user.name.split()[0] if user and user.name else "friend"
         return {
             "reply": (
-                f"You're all set, {user.name.split()[0] if user else 'friend'}! 🎉\n\n"
+                f"You're all set, {first_name}! 🎉\n\n"
                 f"✅ Exam: {profile.exam or '-'}\n"
                 f"🌍 Country: {profile.country or '-'}\n"
-                f"🎯 Goals: {profile.goals or '-'}\n\n"
+                f"🎯 Target Score: {profile.target_score or '-'}\n"
+                f"📅 Exam Date: {profile.exam_date or '-'}\n"
+                f"🔙 Previous Score: {profile.previous_score if profile.previous_score is not None else '-'}\n"
+                f"⏱️ Weekly Hours: {profile.weekly_hours or '-'}\n"
+                f"🕒 Preferred Times: {profile.preferred_times or []}\n\n"
                 "Let’s get started with your personalized prep journey!"
             ),
             "snippets_used": [],
             "onboarding_complete": True
         }
 
-    # 🟡 Initial welcome message
+    # Initial greeting
     if user_input.lower() in ["__init__", "hi", "hello"]:
         first_name = user.name.split()[0] if user and user.name else "there"
         welcome = (
             f"Hey {first_name}! 👋 I’m Clara, your GMAT prep buddy. "
-            "Excited to get to know you. To kick things off, tell me a little about yourself — "
-            "what you do, what made you decide to go for the GMAT, or just anything random 😄"
+            "I'd love to learn about your exam plans—where you're from, your study goals, "
+            "and how you like to prep. Let’s chat! 😄"
         )
         emb = get_embedding(welcome)
         db.add(UserMemory(
@@ -96,7 +138,7 @@ async def handle_onboarding(db: Session, user_id: UUID, user_input: str):
             "onboarding_complete": False
         }
 
-    # 🔹 Store user message
+    # Store user message
     user_emb = get_embedding(user_input)
     db.add(UserMemory(
         user_id=user_id,
@@ -107,20 +149,17 @@ async def handle_onboarding(db: Session, user_id: UUID, user_input: str):
     ))
     db.commit()
 
-    # 🔹 Build memory + prompt
+    # Build the prompt and call OpenAI
     memories = fetch_onboarding_memories(db, user_id)
     messages = build_onboarding_prompt(memories, user_input)
-
-    # 🔹 Call GPT
     chat = client.chat.completions.create(
         model="gpt-4",
         messages=messages,
         temperature=0.7
     )
-    reply_msg = chat.choices[0].message
-    reply_text = reply_msg.content or ""
+    reply_text = chat.choices[0].message.content or ""
 
-    # 🔹 Always save assistant reply
+    # Save assistant reply
     reply_emb = get_embedding(reply_text)
     db.add(UserMemory(
         user_id=user_id,
@@ -131,23 +170,20 @@ async def handle_onboarding(db: Session, user_id: UUID, user_input: str):
     ))
     db.commit()
 
-    # 🔹 Parse final or partial profile
+    # Parse out final_profile or partial_profile
     parsed_json = None
     key_found = None
     for key in ["final_profile", "partial_profile"]:
-        if key in reply_text.lower():
-            try:
-                json_start = reply_text.lower().index(f"{key}:") + len(f"{key}:")
-                json_part = reply_text[json_start:].strip()
-                parsed_json = json.loads(json_part)
-                key_found = key
-                break
-            except Exception as e:
-                print(f"⚠️ Failed to parse {key}: {e}")
+        parsed = extract_profile(key, reply_text)
+        if parsed is not None:
+            parsed_json = parsed
+            key_found = key
+            print(f"🔍 Parsed {key_found}: {parsed_json}")
+            break
 
     onboarding_complete = False
 
-    # 🔹 Save to DB if final_profile
+    # If it's a final_profile, persist to DB
     if parsed_json and key_found == "final_profile":
         onboarding_complete = True
         if profile:
@@ -155,7 +191,11 @@ async def handle_onboarding(db: Session, user_id: UUID, user_input: str):
                 setattr(profile, k, v)
             profile.onboarding_complete = True
         else:
-            db.add(UserProfile(user_id=user_id, onboarding_complete=True, **parsed_json))
+            db.add(UserProfile(
+                user_id=user_id,
+                onboarding_complete=True,
+                **parsed_json
+            ))
         db.commit()
 
     return {
