@@ -15,7 +15,7 @@ class UserProfile(Base):
         default=uuid.uuid4,
     )
     country             = Column(String, nullable=True)
-    exam                = Column(String, nullable=True)
+    exam                = Column(String, nullable=True, default="GMAT")
     target_score        = Column(Integer, nullable=True)
     exam_date           = Column(String, nullable=True)
     previous_score      = Column(Integer, nullable=True)

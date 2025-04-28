@@ -1,6 +1,6 @@
 # Clara
 
-Clara is an AI-powered test prep platform for exams like GMAT and GRE.
+Clara is an AI-powered test prep platform for exams like GMAT.
 
 ## Setup Instructions
 

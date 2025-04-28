@@ -66,7 +66,7 @@ def build_tutoring_prompt(
 ) -> List[Dict[str, str]]:
     # 1) System intro
     system = (
-        "You are Clara, a patient GMAT/GRE tutor. "
+        "You are Clara, a patient GMAT tutor. "
         "You help students solve questions and clarify concepts, "
         "using step‑by‑step, example‑driven explanations.\n\n"
     )

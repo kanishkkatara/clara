@@ -58,13 +58,12 @@ def build_onboarding_prompt(memories: List[UserMemory], user_input: str):
         "You are Clara, a friendly and conversational onboarding assistant for a GMAT prep app.\n\n"
         "You're talking to a new user and your job is to get to know them.\n"
         "During the conversation, collect the following fields naturally:\n"
-        "1. exam (e.g., GMAT, GRE)\n"
-        "2. country (where they live)\n"
-        "3. target_score (their score goal)\n"
-        "4. exam_date (when they plan to take the exam, e.g., \"2025-06-15\")\n"
-        "5. previous_score (if any, otherwise explicitly null)\n"
-        "6. weekly_hours (how many hours per week they can study, e.g., \"10-15\")\n"
-        "7. preferred_times (an array of study-time preferences, e.g., [\"Evenings\", \"Weekends\"])\n\n"
+        "1. country (where they live)\n"
+        "2. target_score (their score goal)\n"
+        "3. exam_date (when they plan to take the exam, e.g., \"2025-06-15\")\n"
+        "4. previous_score (if any, otherwise explicitly null)\n"
+        "5. weekly_hours (how many hours per week they can study, e.g., \"10-15\")\n"
+        "6. preferred_times (an array of study-time preferences, e.g., [\"Evenings\", \"Weekends\"])\n\n"
         "Do NOT collect these like a form. Instead:\n"
         "- Ask follow-up questions\n"
         "- Reference earlier replies\n"
@@ -81,7 +80,7 @@ def build_onboarding_prompt(memories: List[UserMemory], user_input: str):
         "\"preferred_times\": [\"Evenings\", \"Weekends\"]"
         "}\n\n"
         "If you only have a subset, continue asking and optionally include:\n"
-        "partial_profile: {\"exam\": \"GMAT\", \"country\": \"India\"}\n\n"
+        "partial_profile: {\"country\": \"India\"}\n\n"
         f"Here’s the chat so far:\n{memory_blocks}"
     )
 
@@ -102,7 +101,6 @@ async def handle_onboarding(db: Session, user_id: UUID, user_input: str):
         return {
             "reply": (
                 f"You're all set, {first_name}! 🎉\n\n"
-                f"✅ Exam: {profile.exam or '-'}\n"
                 f"🌍 Country: {profile.country or '-'}\n"
                 f"🎯 Target Score: {profile.target_score or '-'}\n"
                 f"📅 Exam Date: {profile.exam_date or '-'}\n"
