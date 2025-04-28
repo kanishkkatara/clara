@@ -1,5 +1,7 @@
-# app/services/question_service.py
-from typing import List, Dict, Any, Optional, Union
+# ==============================================
+# File: src/services/question_service.py
+# ==============================================
+from typing import List, Dict, Any
 from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -9,7 +11,7 @@ from app.schemas.question import (
     QuestionCreate,
     QuestionRead,
     CompositeQuestionRead,
-    QuestionResponse,
+    QuestionResponse
 )
 
 class QuestionService:
@@ -36,7 +38,7 @@ class QuestionService:
         obj = Question(
             type=payload.type,
             content=[block.model_dump() for block in payload.content],
-            options=[opt.model_dump()   for opt   in payload.options],
+            options=[opt.model_dump() for opt in payload.options],
             answers=payload.answers.model_dump(),
             tags=payload.tags,
             difficulty=payload.difficulty,
