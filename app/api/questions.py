@@ -1,4 +1,6 @@
-# app/api/questions.py
+# ================================
+# File: src/api/questions.py
+# ================================
 from fastapi import APIRouter, HTTPException, Query, Depends, status
 from typing import List, Optional
 from uuid import UUID
@@ -10,7 +12,7 @@ from app.schemas.question import (
     QuestionRead,
     QuestionSummaryRead,
     NextQuestionResponse,
-    QuestionResponse,
+    QuestionResponse
 )
 from app.services.question_service import question_service
 from app.services.progress_service import progress_service
@@ -33,7 +35,8 @@ def list_questions(
         "min_difficulty": minDifficulty,
         "max_difficulty": maxDifficulty,
     }
-    return question_service.get_all(filters, skip, limit)
+    # Delegate preview-text logic to service
+    return question_service.get_summaries(filters, skip, limit)
 
 @router.get("/{q_id}", response_model=QuestionResponse)
 def get_question(
@@ -67,3 +70,12 @@ def submit_answer(
         session=session,
     )
     return NextQuestionResponse(next_question=next_q)
+
+@router.post("/bulk", response_model=List[QuestionRead], status_code=201)
+def create_questions_bulk(
+    payloads: List[QuestionCreate],
+    session: Session = Depends(get_db)
+):
+    created = question_service.create_bulk(payloads, session)
+    return [QuestionRead.from_orm(q) for q in created]
+

@@ -128,6 +128,10 @@ class QuestionSummaryRead(PydanticBase):
     tags: List[str]
     parent_id: Optional[UUID] = Field(None, alias="parentId")
     order: Optional[int] = None
+    preview_text: Optional[str] = Field(
+        None,
+        description="A truncated snippet (first N chars) of the first paragraph for list previews"
+    )
 
 QuestionResponse = Union[QuestionRead, CompositeQuestionRead]
 
