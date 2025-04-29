@@ -39,11 +39,13 @@ class DashboardService:
                 .first()
         )
         target_score = profile.target_score if profile else None
+        total_secs = getattr(profile, "total_time", 0) or 0
+        time_hours = round(total_secs / 3600.0, 2)
 
         # TODO: derive real timeStudied
         return StatsSchema(
             targetScore=target_score,
-            timeStudied=0.0,
+            timeStudied=time_hours,
             questionsCompleted=total
         )
 
@@ -79,8 +81,8 @@ class DashboardService:
         # Map each dashboard category to the question.type values in it
         category_type_map = {
             'quantitative': ['problem-solving'],
-            'verbal': ['reading_comprehension', 'critical_reasoning'],
-            'di': ['data-sufficiency', 'integrated-reasoning'],
+            'verbal': ['reading-comprehension', 'critical-reasoning'],
+            'di': ['data-sufficiency', 'table-analysis', 'graphical-interpretation', 'two-part-analysis', 'multi-source-reasoning'],
         }
 
         stats: dict[str, int] = {}

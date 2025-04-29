@@ -1,7 +1,8 @@
 # app/services/progress_service.py
 
-import datetime
+from datetime import datetime
 from sqlalchemy.orm import Session
+from app.models.profile import UserProfile
 from app.models.progress import UserQuestionProgress
 from app.schemas.progress import AnswerCreate
 
@@ -19,8 +20,8 @@ class ProgressService:
         if existing:
             # 2a) Update the existing entry
             existing.is_correct = payload.is_correct
-            # bump answered_at to now (you could also let the DB default it)
             existing.answered_at = datetime.utcnow()
+            existing.time_taken  = payload.time_taken
             session.add(existing)
             session.commit()
             session.refresh(existing)
@@ -31,9 +32,14 @@ class ProgressService:
             user_id=payload.user_id,
             question_id=payload.question_id,
             is_correct=payload.is_correct,
+            time_taken=   payload.time_taken 
         )
         session.add(prog)
         session.commit()
         session.refresh(prog)
+        profile = session.query(UserProfile).filter_by(user_id=payload.user_id).one()
+        profile.total_time += payload.time_taken
+        session.add(profile)
+        session.commit()
         return prog
 progress_service = ProgressService()

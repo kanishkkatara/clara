@@ -22,6 +22,7 @@ class UserProfile(Base):
     weekly_hours        = Column(String, nullable=True)
     preferred_times     = Column(JSON, nullable=True)
     onboarding_complete = Column(Boolean, nullable=False, default=False)
+    total_time          = Column(Integer, nullable=False, default=0)
     updated_at          = Column(
         TIMESTAMP(timezone=True),
         nullable=False,

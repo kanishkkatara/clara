@@ -6,3 +6,4 @@ class AnswerCreate(BaseModel):
     question_id: UUID
     selected_option: str
     is_correct: bool
+    time_taken:   int

@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
+from jose.exceptions import ExpiredSignatureError
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -27,6 +28,11 @@ def create_access_token(data: dict):
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     creds_exc = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid auth", headers={"WWW-Authenticate": "Bearer"})
+    expired_exc = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Token expired",  # expired signature
+        headers={"WWW-Authenticate": "Bearer"},
+ )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         raw_sub = payload.get("sub")
@@ -43,6 +49,8 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         ).first()
         if not user:
             raise creds_exc
+    except ExpiredSignatureError:
+        raise expired_exc
     except (JWTError, ValueError):
         raise creds_exc
 

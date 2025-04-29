@@ -13,6 +13,7 @@ class UserQuestionProgress(Base):
     question_id = Column(PGUUID(as_uuid=True), ForeignKey("questions.id"), nullable=False, index=True)
     is_correct = Column(Boolean, nullable=False)
     answered_at = Column(DateTime(timezone=True), server_default=func.now())
+    time_taken   = Column(Integer, nullable=False, default=0)
 
     # back-references:
     user = relationship("User", back_populates="progress")
