@@ -10,3 +10,4 @@ sqlmodel
 python-jose[cryptography]
 google-auth
 requests
+alembic
