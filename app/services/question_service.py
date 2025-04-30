@@ -82,7 +82,8 @@ class QuestionService:
             tags=payload.tags,
             difficulty=payload.difficulty,
             parent_id=payload.parent_id,
-            order=payload.order
+            order=payload.order,
+            source=payload.source
         )
         db.add(obj)
         db.commit()
@@ -101,8 +102,13 @@ class QuestionService:
                 obj = Question(
                     type=payload.type,
                     content=[block.model_dump() for block in payload.content],
-                    options=[], answers={}, tags=payload.tags,
-                    difficulty=payload.difficulty, parent_id=None, order=None
+                    options=[],
+                    answers={},
+                    tags=payload.tags,
+                    difficulty=payload.difficulty,
+                    parent_id=None,
+                    order=None,
+                    source=payload.source
                 )
                 session.add(obj)
                 session.flush()  # assigns obj.id
@@ -120,7 +126,8 @@ class QuestionService:
                     tags=payload.tags,
                     difficulty=payload.difficulty,
                     parent_id=payload.parent_id,
-                    order=payload.order
+                    order=payload.order,
+                    source=payload.source
                 )
                 session.add(obj)
                 created_objs.append(obj)

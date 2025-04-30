@@ -21,6 +21,7 @@ class Question(Base):
     difficulty = Column(Integer, nullable=False, server_default="1")
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+    source = Column(String, nullable=True)
 
     children = relationship("Question", back_populates="parent", lazy="selectin", order_by="Question.order")
     parent = relationship("Question", back_populates="children", remote_side=[id])

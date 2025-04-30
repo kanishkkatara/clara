@@ -105,6 +105,7 @@ class QuestionBase(PydanticBase):
 class QuestionCreate(QuestionBase):
     parent_id: Optional[UUID] = None
     order: Optional[int] = None
+    source: Optional[str] = None
 
 class QuestionRead(QuestionBase):
     kind: Literal["single"] = Field("single", alias="kind")
