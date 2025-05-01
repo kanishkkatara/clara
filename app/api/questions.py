@@ -14,6 +14,7 @@ from app.schemas.question import (
     NextQuestionResponse,
     QuestionResponse
 )
+from app.services.auth import get_current_user
 from app.services.question_service import question_service
 from app.services.progress_service import progress_service
 from app.services.recommendation_service import recommendation_service
@@ -26,16 +27,19 @@ def list_questions(
     tags: Optional[List[str]] = Query(None),
     minDifficulty: Optional[int] = Query(None, alias="minDifficulty"),
     maxDifficulty: Optional[int] = Query(None, alias="maxDifficulty"),
+    progress_filter: Optional[str] = Query("all"),  # all | attempted | non-attempted | correct | incorrect
     skip: int = 0,
     limit: int = 20,
+    user = Depends(get_current_user),
 ):
     filters = {
         "type": type or [],
         "tags": tags or [],
         "min_difficulty": minDifficulty,
         "max_difficulty": maxDifficulty,
+        "progress_filter": progress_filter,
+        "user_id": user.id if user else None,  # only if user authenticated
     }
-    # Delegate preview-text logic to service
     return question_service.get_summaries(filters, skip, limit)
 
 @router.get("/{q_id}", response_model=QuestionResponse)

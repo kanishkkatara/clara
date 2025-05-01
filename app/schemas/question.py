@@ -133,6 +133,8 @@ class QuestionSummaryRead(PydanticBase):
         None,
         description="A truncated snippet (first N chars) of the first paragraph for list previews"
     )
+    attempted: bool = False
+    correct: Optional[bool] = None
 
 QuestionResponse = Union[QuestionRead, CompositeQuestionRead]
 

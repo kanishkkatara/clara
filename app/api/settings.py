@@ -28,11 +28,15 @@ class NotificationSettings(BaseModel):
 @router.get("/basic", response_model=BasicSettings)
 def get_basic(user: User = Depends(get_current_user)):
     p = user.profile
+    try:
+        exam_date = p.exam_date and date.fromisoformat(p.exam_date)
+    except ValueError:
+        exam_date = None
     return BasicSettings(
         name=user.name,
         email=user.email,
         target_score=p.target_score,
-        exam_date=(p.exam_date and date.fromisoformat(p.exam_date)),
+        exam_date=exam_date,
         previous_score=p.previous_score,
     )
 

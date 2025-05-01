@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload, Session
 from app.db import get_db
 from app.models.question import Question
+from app.models.progress import UserQuestionProgress
 from app.schemas.question import (
     QuestionCreate,
     QuestionSummaryRead,
@@ -20,7 +21,19 @@ class QuestionService:
         self, filters: Dict[str, Any], skip: int = 0, limit: int = 50
     ) -> List[QuestionSummaryRead]:
         db = next(get_db())
-        stmt = select(Question).where(Question.parent_id == None)
+
+        user_id = filters.get("user_id")
+
+        stmt = select(
+            Question,
+        )
+
+        if user_id:
+            stmt = stmt.add_columns(UserQuestionProgress.is_correct)
+
+        stmt = stmt.where(Question.parent_id == None)
+
+        # Question filters
         if filters.get("type"):
             stmt = stmt.where(Question.type.in_(filters["type"]))
         if filters.get("tags"):
@@ -29,17 +42,49 @@ class QuestionService:
             stmt = stmt.where(Question.difficulty >= filters["min_difficulty"])
         if filters.get("max_difficulty") is not None:
             stmt = stmt.where(Question.difficulty <= filters["max_difficulty"])
+
+        # Join progress ONLY if user_id is present
+        if user_id:
+            stmt = stmt.outerjoin(
+                UserQuestionProgress,
+                (UserQuestionProgress.question_id == Question.id) &
+                (UserQuestionProgress.user_id == user_id)
+            )
+
+            # Progress filters
+            pf = filters.get("progress_filter", "all")
+            if pf == "attempted":
+                stmt = stmt.where(UserQuestionProgress.is_correct.isnot(None))
+            elif pf == "non-attempted":
+                stmt = stmt.where(UserQuestionProgress.is_correct.is_(None))
+            elif pf == "correct":
+                stmt = stmt.where(UserQuestionProgress.is_correct == True)
+            elif pf == "incorrect":
+                stmt = stmt.where(UserQuestionProgress.is_correct == False)
+
         stmt = stmt.offset(skip).limit(limit)
-        results = db.execute(stmt).scalars().all()
+
+        results = db.execute(stmt).all()
+
         summaries: List[QuestionSummaryRead] = []
-        for q in results:
-            # extract first paragraph text as preview
+
+        for row in results:
+            if user_id:
+                q, is_correct = row
+                attempted = is_correct is not None
+                correct = is_correct if attempted else None
+            else:
+                q = row[0]  # only Question, no is_correct
+                attempted = False
+                correct = None
+
             preview = None
             for block in q.content or []:
                 if isinstance(block, dict) and block.get("type") == "paragraph":
                     text = block.get("text", "")
                     preview = text[:100] + ("..." if len(text) > 100 else "")
                     break
+
             summaries.append(
                 QuestionSummaryRead(
                     id=q.id,
@@ -48,9 +93,12 @@ class QuestionService:
                     tags=q.tags,
                     parent_id=q.parent_id,
                     order=q.order,
-                    preview_text=preview
+                    preview_text=preview,
+                    attempted=attempted,
+                    correct=correct
                 )
             )
+
         db.close()
         return summaries
 
