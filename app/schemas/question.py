@@ -15,7 +15,7 @@ class PydanticBase(BaseModel):
         json_schema_mode="openapi",
     )
 
-# --- Content block models (discriminated by `type`) ---
+# --- Content block models ---
 class ParagraphBlock(PydanticBase):
     type: Literal["paragraph"]
     text: str
@@ -41,8 +41,8 @@ class MatrixBlock(PydanticBase):
 
 class DSGridBlock(PydanticBase):
     type: Literal["ds_grid"]
-    row_headers: List[str] = Field(..., description="Labels for each row")
-    col_headers: List[str] = Field(..., description="Labels for each column")
+    row_headers: List[str]
+    col_headers: List[str]
     data: Optional[Dict[str, Any]] = None
 
 class GenericBlock(PydanticBase):
@@ -69,13 +69,13 @@ ContentBlock = Annotated[
 
 # --- Option schema ---
 class Option(PydanticBase):
-    id: str = Field(..., description="Option label, e.g. 'A'")
+    id: str
     blocks: List[ContentBlock]
 
 # --- Coordinate for DS/Two-Part grid answers ---
 class CellCoordinate(PydanticBase):
-    row_index: int = Field(..., ge=0)
-    column_index: int = Field(..., ge=0)
+    row_index: int
+    column_index: int
 
 # --- Answer schema ---
 class AnswerSchema(PydanticBase):
@@ -95,7 +95,7 @@ class AnswerSchema(PydanticBase):
 
 # --- Base fields shared by create & read ---
 class QuestionBase(PydanticBase):
-    type: str = Field(..., description="e.g. 'problem-solving', 'two-part-analysis'")
+    type: str
     content: List[ContentBlock]
     options: List[Option] = Field(default_factory=list)
     answers: AnswerSchema
@@ -107,21 +107,36 @@ class QuestionCreate(QuestionBase):
     order: Optional[int] = None
     source: Optional[str] = None
 
+# --- Subquestion schema ---
 class QuestionRead(QuestionBase):
     kind: Literal["single"] = Field("single", alias="kind")
     id: UUID
+    parent_id: Optional[UUID] = Field(None, alias="parentId")
+    order: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 
+# --- Full response schema for standalone single questions ---
+class SingleQuestionRead(QuestionBase):
+    kind: Literal["single"] = Field("single", alias="kind")
+    id: UUID
+    parent_id: Optional[UUID] = Field(None, alias="parentId")
+    order: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+    parent: Optional[QuestionRead] = None
+
+# --- Composite question response schema ---
 class CompositeQuestionRead(PydanticBase):
     kind: Literal["composite"] = Field("composite", alias="kind")
     group_id: UUID = Field(..., alias="groupId")
     type: str
-    passage: List[ContentBlock]
+    parent: Optional[QuestionRead] = None
     subquestions: List[QuestionRead]
     total_subquestions: int = Field(..., alias="totalSubquestions")
     next_group_id: Optional[UUID] = Field(None, alias="nextGroupId")
 
+# --- Summary for list views ---
 class QuestionSummaryRead(PydanticBase):
     id: UUID
     type: str
@@ -129,14 +144,13 @@ class QuestionSummaryRead(PydanticBase):
     tags: List[str]
     parent_id: Optional[UUID] = Field(None, alias="parentId")
     order: Optional[int] = None
-    preview_text: Optional[str] = Field(
-        None,
-        description="A truncated snippet (first N chars) of the first paragraph for list previews"
-    )
+    preview_text: Optional[str] = None
     attempted: bool = False
     correct: Optional[bool] = None
+    first_subquestion_id: Optional[UUID] = None
 
-QuestionResponse = Union[QuestionRead, CompositeQuestionRead]
+# --- Response unions ---
+QuestionResponse = Union[SingleQuestionRead, CompositeQuestionRead]
 
-class NextQuestionResponse(PydanticBase):
-    next_question: Optional[QuestionResponse]
+class NextQuestionIdResponse(PydanticBase):
+    next_question_id: Optional[UUID]

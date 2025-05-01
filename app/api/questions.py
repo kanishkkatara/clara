@@ -8,11 +8,12 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.schemas.progress import AnswerCreate
 from app.schemas.question import (
+    NextQuestionIdResponse,
     QuestionCreate,
     QuestionRead,
     QuestionSummaryRead,
-    NextQuestionResponse,
-    QuestionResponse
+    QuestionResponse,
+    SingleQuestionRead,
 )
 from app.services.auth import get_current_user
 from app.services.question_service import question_service
@@ -45,14 +46,48 @@ def list_questions(
 @router.get("/{q_id}", response_model=QuestionResponse)
 def get_question(
     q_id: UUID,
-    include_sub: bool = Query(
-        False,
-        alias="include_sub",
-        description="Include sub-questions if composite"
-    ),
+    session: Session = Depends(get_db)
 ):
     try:
-        return question_service.get_response(q_id, include_sub)
+        question = question_service.get_question_by_id(q_id, session=session)
+
+        # --- CASE 1: Subquestion inside composite ---
+        if question.parent_id:
+            parent_q = question_service.get_question_by_id(question.parent_id, session=session)
+
+            return SingleQuestionRead(
+                kind="single",
+                id=question.id,
+                type=question.type,
+                content=question.content,
+                options=question.options,
+                answers=question.answers,
+                tags=question.tags,
+                difficulty=question.difficulty,
+                order=question.order or 0,
+                parent_id=question.parent_id,
+                created_at=question.created_at,
+                updated_at=question.updated_at,
+                parent=parent_q
+            )
+
+        # --- CASE 2: Standalone question ---
+        return SingleQuestionRead(
+            kind="single",
+            id=question.id,
+            type=question.type,
+            content=question.content,
+            options=question.options,
+            answers=question.answers,
+            tags=question.tags,
+            difficulty=question.difficulty,
+            order=question.order or 0,
+            parent_id=question.parent_id,
+            created_at=question.created_at,
+            updated_at=question.updated_at,
+            parent=None
+        )
+
     except KeyError:
         raise HTTPException(status_code=404, detail="Question not found")
 
@@ -60,20 +95,41 @@ def get_question(
 def create_question(payload: QuestionCreate):
     return question_service.create(payload)
 
-@router.post("/{q_id}/submit", response_model=NextQuestionResponse, status_code=status.HTTP_200_OK)
+@router.post("/{q_id}/submit", response_model=NextQuestionIdResponse, status_code=status.HTTP_200_OK)
 def submit_answer(
     q_id: UUID,
     payload: AnswerCreate,
     session: Session = Depends(get_db),
 ):
     progress_service.record(payload, session=session)
-    next_q = recommendation_service.recommend_next(
-        user_id=payload.user_id,
-        last_question_id=payload.question_id,
-        is_correct=payload.is_correct,
-        session=session,
-    )
-    return NextQuestionResponse(next_question=next_q)
+
+    # Fetch the current question to check if it is part of a composite
+    current_q = question_service.get_question_by_id(payload.question_id, session=session)
+
+    next_question = None
+
+    if current_q.parent_id:
+        # 🧠 Current question is a subquestion inside a composite group
+        subquestions = question_service.get_subquestions_by_group(current_q.parent_id, session=session)
+        subquestions = sorted(subquestions, key=lambda q: q.order)
+
+        current_index = next((i for i, q in enumerate(subquestions) if q.id == current_q.id), -1)
+
+        if 0 <= current_index < len(subquestions) - 1:
+            # ➡ There is a next subquestion in the same composite group
+            next_question = subquestions[current_index + 1]
+
+    # If no next subquestion found, recommend a fresh question
+    if not next_question:
+        next_question = recommendation_service.recommend_next(
+            user_id=payload.user_id,
+            last_question_id=payload.question_id,
+            is_correct=payload.is_correct,
+            session=session,
+        )
+
+    return NextQuestionIdResponse(next_question_id=next_question.id if next_question else None)
+
 
 @router.post("/bulk", response_model=List[QuestionRead], status_code=201)
 def create_questions_bulk(

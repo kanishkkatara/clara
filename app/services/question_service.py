@@ -4,16 +4,13 @@
 from typing import List, Dict, Any
 from uuid import UUID
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload, Session
+from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models.question import Question
 from app.models.progress import UserQuestionProgress
 from app.schemas.question import (
     QuestionCreate,
-    QuestionSummaryRead,
-    QuestionRead,
-    CompositeQuestionRead,
-    QuestionResponse
+    QuestionSummaryRead
 )
 
 class QuestionService:
@@ -85,6 +82,14 @@ class QuestionService:
                     preview = text[:100] + ("..." if len(text) > 100 else "")
                     break
 
+            # 🧠 Fetch first subquestion ID if composite (parent_id == None but has children)
+            first_sub_id = None
+            if q.children:
+                # Sort children by order and pick the first
+                ordered_subs = sorted(q.children, key=lambda c: (c.order or 0))
+                if ordered_subs:
+                    first_sub_id = ordered_subs[0].id
+
             summaries.append(
                 QuestionSummaryRead(
                     id=q.id,
@@ -95,30 +100,13 @@ class QuestionService:
                     order=q.order,
                     preview_text=preview,
                     attempted=attempted,
-                    correct=correct
+                    correct=correct,
+                    first_subquestion_id=first_sub_id  # ✅ new field
                 )
             )
 
         db.close()
         return summaries
-
-    def get_all(
-        self, filters: Dict[str, Any], skip: int = 0, limit: int = 50
-    ) -> List[Question]:
-        db = next(get_db())
-        stmt = select(Question).where(Question.parent_id == None)
-        if filters.get("type"):
-            stmt = stmt.where(Question.type.in_(filters["type"]))
-        if filters.get("tags"):
-            stmt = stmt.where(Question.tags.overlap(filters["tags"]))
-        if filters.get("min_difficulty") is not None:
-            stmt = stmt.where(Question.difficulty >= filters["min_difficulty"])
-        if filters.get("max_difficulty") is not None:
-            stmt = stmt.where(Question.difficulty <= filters["max_difficulty"])
-        stmt = stmt.offset(skip).limit(limit)
-        result = db.execute(stmt).scalars().all()
-        db.close()
-        return result
 
     def create(self, payload: QuestionCreate) -> Question:
         db = next(get_db())
@@ -195,33 +183,19 @@ class QuestionService:
 
         return created_objs
 
-    def get_response(
-        self, qid: UUID, include_sub: bool = False
-    ) -> QuestionResponse:
-        db = next(get_db())
+    def get_question_by_id(self, qid: UUID, session: Session) -> Question:
+        stmt = select(Question).where(Question.id == qid)
+        result = session.execute(stmt).scalar_one_or_none()
+        if not result:
+            raise KeyError(f"Question {qid} not found")
+        return result
+
+    def get_subquestions_by_group(self, group_id: UUID, session: Session) -> List[Question]:
         stmt = (
             select(Question)
-            .where(Question.id == qid)
-            .options(selectinload(Question.children))
+            .where(Question.parent_id == group_id)
         )
-        item = db.execute(stmt).scalar_one_or_none()
-        if not item:
-            db.close()
-            raise KeyError(f"Question {qid} not found")
-        if include_sub and item.children:
-            sub_items = sorted(item.children, key=lambda x: (x.order or 0))
-            resp = CompositeQuestionRead(
-                groupId=item.id,
-                type=item.type,
-                passage=item.content,
-                subquestions=[QuestionRead.from_orm(child) for child in sub_items],
-                totalSubquestions=len(sub_items),
-                nextGroupId=None
-            )
-            db.close()
-            return resp
-        resp = QuestionRead.from_orm(item)
-        db.close()
-        return resp
+        results = session.execute(stmt).scalars().all()
+        return results
 
 question_service = QuestionService()
