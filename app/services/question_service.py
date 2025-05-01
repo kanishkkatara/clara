@@ -143,15 +143,20 @@ class QuestionService:
         self, payloads: List[QuestionCreate], session: Session
     ) -> List[Question]:
         created_objs: List[Question] = []
+
+        # Define which types are considered composite parents
+        COMPOSITE_TYPES = {"multi-source-reasoning", "reading-comprehension"}
+
         current_parent: UUID = None
+
         for payload in payloads:
-            # detect new composite passage
-            if payload.type == "multi-source-reasoning":
+            # If this is a composite type, create a new parent question
+            if payload.type in COMPOSITE_TYPES:
                 obj = Question(
                     type=payload.type,
                     content=[block.model_dump() for block in payload.content],
-                    options=[],
-                    answers={},
+                    options=[],  # Composite parents have no options
+                    answers={},  # Composite parents have no answers
                     tags=payload.tags,
                     difficulty=payload.difficulty,
                     parent_id=None,
@@ -159,13 +164,15 @@ class QuestionService:
                     source=payload.source
                 )
                 session.add(obj)
-                session.flush()  # assigns obj.id
+                session.flush()  # Assigns obj.id
                 current_parent = obj.id
                 created_objs.append(obj)
+
             else:
-                # auto-assign parent if not provided
+                # If no parent_id provided, assign the last created composite parent
                 if payload.parent_id is None and current_parent:
                     payload.parent_id = current_parent
+
                 obj = Question(
                     type=payload.type,
                     content=[block.model_dump() for block in payload.content],
@@ -179,9 +186,13 @@ class QuestionService:
                 )
                 session.add(obj)
                 created_objs.append(obj)
+
         session.commit()
+
+        # Refresh to load the final state from the DB
         for obj in created_objs:
             session.refresh(obj)
+
         return created_objs
 
     def get_response(
