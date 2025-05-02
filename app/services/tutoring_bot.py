@@ -5,9 +5,13 @@ from uuid import UUID
 from openai import OpenAI
 import os
 from sqlalchemy.orm import Session
+
 from app.models.memory import UserMemory
+from app.models.question import Question
+from app.services.question_service import question_service
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 
 # — Embedding helper
 def get_embedding(text: str) -> List[float]:
@@ -17,7 +21,8 @@ def get_embedding(text: str) -> List[float]:
     )
     return resp.data[0].embedding
 
-# — Fetch top‑k similar tutoring memories
+
+# — Fetch top-k similar tutoring memories
 def fetch_tutoring_memories(
     db: Session,
     user_id: UUID,
@@ -26,96 +31,102 @@ def fetch_tutoring_memories(
 ) -> List[UserMemory]:
     return (
         db.query(UserMemory)
-          .filter(UserMemory.user_id == user_id,
-                  UserMemory.type == "tutoring")
+          .filter(
+              UserMemory.user_id == user_id,
+              UserMemory.type == "tutoring"
+          )
           .order_by(UserMemory.embedding.l2_distance(query_emb))
           .limit(k)
           .all()
     )
 
-def extract_text(node):
+
+def extract_text(node: Any) -> str:
     """
-    Given either a string or a dict with:
+    Given a Question ORM object, a string, or a dict with:
       - 'text': a simple string, or
-      - 'blocks': a list of { 'text': ... } paragraphs
+      - 'blocks': a list of { 'text': ... } paragraphs,
     returns the joined text.
     """
+    # unwrap Question ORM
+    if isinstance(node, Question):
+        # assume .content is a list of blocks
+        return "\n".join(extract_text(block) for block in node.content or [])
+    # simple string
     if isinstance(node, str):
         return node
-    if not isinstance(node, dict):
-        return ""
-    # prefer a top-level 'text' field if present
-    if 'text' in node and isinstance(node['text'], str):
-        return node['text']
-    # otherwise, collect from blocks
-    blocks = node.get('blocks')
-    if isinstance(blocks, list):
-        pieces = []
-        for b in blocks:
-            t = b.get('text')
-            if isinstance(t, str):
-                pieces.append(t)
-        return "\n".join(pieces)
+    # generic dict shape
+    if isinstance(node, dict):
+        if 'text' in node and isinstance(node['text'], str):
+            return node['text']
+        blocks = node.get('blocks')
+        if isinstance(blocks, list):
+            return "\n".join(
+                b.get('text', '') for b in blocks if isinstance(b, dict) and 'text' in b
+            )
     return ""
 
-# — Build prompt, injecting question context when provided
+
+# — Build prompt, injecting question + parent context when provided
 def build_tutoring_prompt(
     memories: List[UserMemory],
     user_input: str,
-    question: Optional[Union[str, Dict[str, Any]]] = None
+    context: Optional[Dict[str, Question]] = None
 ) -> List[Dict[str, str]]:
     # 1) System intro
     system = (
         "You are Clara, a patient GMAT tutor. "
         "You help students solve questions and clarify concepts, "
-        "using step‑by‑step, example‑driven explanations.\n\n"
+        "using step-by-step, example-driven explanations.\n\n"
     )
 
-    # 2) Determine if this is a plain greeting
+    # 2) Plain greeting?
     is_greet = user_input.strip().lower() in {"hi", "hello", "hey"}
 
-    # 3) If question context is provided and not just a greeting, insert it
+    if context and not is_greet:
+        q_obj = context.get("question")
+        p_obj = context.get("parent")
 
+        # Question text
+        if q_obj:
+            q_text = extract_text(q_obj)
+            system += f"Current question:\n\"\"\"\n{q_text}\n\"\"\"\n\n"
+            # Options if present
+            opts = getattr(q_obj, "options", None)
+            if isinstance(opts, list) and opts:
+                system += "Options:\n"
+                for opt in opts:
+                    # each opt may be dict with id/text
+                    oid = opt.get("id", "")
+                    otext = extract_text(opt)
+                    system += f"- {oid}: {otext}\n"
+                system += "\n"
 
-    if question and not is_greet:
-        # build the prompt
-        if isinstance(question, str):
-            q_text = question
-        else:
-            q_text = extract_text(question)
+        # Parent question text
+        if p_obj:
+            p_text = extract_text(p_obj)
+            system += f"Related parent question:\n\"\"\"\n{p_text}\n\"\"\"\n\n"
 
-        system += f"Current question:\n\"\"\"\n{q_text}\n\"\"\"\n\n"
-
-        # now options
-        opts = question.get("options") if isinstance(question, dict) else None
-        if isinstance(opts, list) and opts:
-            system += "Options:\n"
-            for opt in opts:
-                oid = opt.get("id", "")
-                # extract text from the same shape
-                otext = extract_text(opt)
-                system += f"- {oid}: {otext}\n"
-            system += "\n"
-
-    # 4) Include past tutoring memory if any
+    # 3) Include past tutoring memory
     if memories:
         block = "\n".join(f"- {m.source.upper()}: {m.message}" for m in memories)
         system += f"Recent conversation:\n{block}\n\n"
 
-    # 5) Assemble messages
+    # 4) Assemble messages
     return [
         {"role": "system", "content": system},
         {"role": "user",   "content": user_input}
     ]
 
-# — The restored and enhanced handle_tutoring method
+
+# — The tutoring handler
 async def handle_tutoring(
     db: Session,
     user_id: UUID,
     user_input: str,
     context: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
-    # A) Persist the user message
+    # A) Save the user message
     user_emb = get_embedding(user_input)
     db.add(UserMemory(
         user_id=user_id,
@@ -126,17 +137,17 @@ async def handle_tutoring(
     ))
     db.commit()
 
-    # B) Extract question context from the incoming dict
-    question_ctx: Optional[Union[str, Dict[str, Any]]] = None
-    if context:
-        # FE should send { "question": { "text": "...", "options": [...] } }
-        if "question" in context:
-            question_ctx = context["question"]
-        # Or it could send a simple string under "question_text"
-        elif "question_text" in context:
-            question_ctx = context["question_text"]
+    # B) Fetch question + parent by ID
+    question_ctx: Optional[Dict[str, Question]] = None
+    if context and "question" in context:
+        q_info = context["question"]
+        q_id = q_info.get("id")
+        p_id = q_info.get("parent_id")
+        q_obj = question_service.get_question_by_id(q_id, session=db) if q_id else None
+        p_obj = question_service.get_question_by_id(p_id, session=db) if p_id else None
+        question_ctx = {"question": q_obj, "parent": p_obj}
 
-    # C) Fetch memory & build the prompt
+    # C) Build prompt
     memories = fetch_tutoring_memories(db, user_id, user_emb)
     prompt = build_tutoring_prompt(memories, user_input, question_ctx)
 
@@ -148,7 +159,7 @@ async def handle_tutoring(
     )
     reply = resp.choices[0].message.content or "Sorry, I didn’t catch that."
 
-    # E) Persist the assistant’s reply
+    # E) Save assistant reply
     bot_emb = get_embedding(reply)
     db.add(UserMemory(
         user_id=user_id,
@@ -159,7 +170,7 @@ async def handle_tutoring(
     ))
     db.commit()
 
-    # F) Return the reply and any snippets used
+    # F) Return
     return {
         "reply": reply,
         "snippets_used": [m.message for m in memories]

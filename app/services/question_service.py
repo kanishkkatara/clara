@@ -12,84 +12,95 @@ from app.schemas.question import (
     QuestionCreate,
     QuestionSummaryRead
 )
+from sqlalchemy import and_
+from typing import Any, Dict, List
+from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 
 class QuestionService:
+
     def get_summaries(
         self, filters: Dict[str, Any], skip: int = 0, limit: int = 50
     ) -> List[QuestionSummaryRead]:
+        # Open a DB session
         db = next(get_db())
-
         user_id = filters.get("user_id")
+        pf = filters.get("progress_filter", "all")
 
-        stmt = select(
-            Question,
+        # 1) Base query: top-level questions with children eager-loaded
+        query = (
+            db.query(Question)
+            .options(joinedload(Question.children))
+            .filter(Question.parent_id == None)
         )
 
-        if user_id:
-            stmt = stmt.add_columns(UserQuestionProgress.is_correct)
-
-        stmt = stmt.where(Question.parent_id == None)
-
-        # Question filters
+        # 2) Apply simple filters
         if filters.get("type"):
-            stmt = stmt.where(Question.type.in_(filters["type"]))
+            query = query.filter(Question.type.in_(filters["type"]))
         if filters.get("tags"):
-            stmt = stmt.where(Question.tags.overlap(filters["tags"]))
+            query = query.filter(Question.tags.overlap(filters["tags"]))
         if filters.get("min_difficulty") is not None:
-            stmt = stmt.where(Question.difficulty >= filters["min_difficulty"])
+            query = query.filter(Question.difficulty >= filters["min_difficulty"])
         if filters.get("max_difficulty") is not None:
-            stmt = stmt.where(Question.difficulty <= filters["max_difficulty"])
+            query = query.filter(Question.difficulty <= filters["max_difficulty"])
 
-        # Join progress ONLY if user_id is present
+        # 3) Execute question fetch
+        questions = query.all()
+
+        # 4) Load all progress rows for this user at once
+        progress_map: Dict[int, List[bool]] = {}
         if user_id:
-            stmt = stmt.outerjoin(
-                UserQuestionProgress,
-                (UserQuestionProgress.question_id == Question.id) &
-                (UserQuestionProgress.user_id == user_id)
+            rows = (
+                db.query(UserQuestionProgress)
+                .filter(UserQuestionProgress.user_id == user_id)
+                .all()
             )
-
-            # Progress filters
-            pf = filters.get("progress_filter", "all")
-            if pf == "attempted":
-                stmt = stmt.where(UserQuestionProgress.is_correct.isnot(None))
-            elif pf == "non-attempted":
-                stmt = stmt.where(UserQuestionProgress.is_correct.is_(None))
-            elif pf == "correct":
-                stmt = stmt.where(UserQuestionProgress.is_correct == True)
-            elif pf == "incorrect":
-                stmt = stmt.where(UserQuestionProgress.is_correct == False)
-
-        stmt = stmt.offset(skip).limit(limit)
-
-        results = db.execute(stmt).all()
+            for pr in rows:
+                progress_map.setdefault(pr.question_id, []).append(pr.is_correct)
 
         summaries: List[QuestionSummaryRead] = []
-
-        for row in results:
-            if user_id:
-                q, is_correct = row
-                attempted = is_correct is not None
-                correct = is_correct if attempted else None
-            else:
-                q = row[0]  # only Question, no is_correct
-                attempted = False
-                correct = None
-
+        for q in questions:
+            # Build preview text
             preview = None
             for block in q.content or []:
                 if isinstance(block, dict) and block.get("type") == "paragraph":
-                    text = block.get("text", "")
-                    preview = text[:100] + ("..." if len(text) > 100 else "")
+                    txt = block.get("text", "")
+                    preview = txt[:100] + ("..." if len(txt) > 100 else "")
                     break
 
-            # 🧠 Fetch first subquestion ID if composite (parent_id == None but has children)
-            first_sub_id = None
+            # Determine first subquestion ID
+            first_sub = None
             if q.children:
-                # Sort children by order and pick the first
-                ordered_subs = sorted(q.children, key=lambda c: (c.order or 0))
-                if ordered_subs:
-                    first_sub_id = ordered_subs[0].id
+                ordered = sorted(q.children, key=lambda c: (c.order or 0))
+                first_sub = ordered[0].id if ordered else None
 
+            # Compute attempted/correct status
+            leaf_prog = progress_map.get(q.id, [])
+            child_prog = []
+            for c in q.children:
+                child_prog.extend(progress_map.get(c.id, []))
+
+            attempted = bool(leaf_prog or child_prog)
+            if child_prog:
+                correct = all(child_prog)
+            elif leaf_prog:
+                # take the first leaf attempt
+                correct = leaf_prog[0]
+            else:
+                correct = None
+
+            # Apply progress_filter
+            if user_id:
+                if pf == "non-attempted" and attempted:
+                    continue
+                if pf == "attempted" and not attempted:
+                    continue
+                if pf == "correct" and correct is not True:
+                    continue
+                if pf == "incorrect" and correct is not False:
+                    continue
+
+            # Build summary DTO
             summaries.append(
                 QuestionSummaryRead(
                     id=q.id,
@@ -101,12 +112,14 @@ class QuestionService:
                     preview_text=preview,
                     attempted=attempted,
                     correct=correct,
-                    first_subquestion_id=first_sub_id  # ✅ new field
+                    first_subquestion_id=first_sub,
                 )
             )
 
         db.close()
-        return summaries
+
+        # 5) Paginate in-memory
+        return summaries[skip : skip + limit]
 
     def create(self, payload: QuestionCreate) -> Question:
         db = next(get_db())
