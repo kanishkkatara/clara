@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.schemas.progress import AnswerCreate
 from app.schemas.question import (
+    IsDeletedPayload,
     NextQuestionIdResponse,
     QuestionCreate,
     QuestionRead,
@@ -91,10 +92,6 @@ def get_question(
     except KeyError:
         raise HTTPException(status_code=404, detail="Question not found")
 
-@router.post("/", response_model=QuestionRead, status_code=201)
-def create_question(payload: QuestionCreate):
-    return question_service.create(payload)
-
 @router.post("/{q_id}/submit", response_model=NextQuestionIdResponse, status_code=status.HTTP_200_OK)
 def submit_answer(
     q_id: UUID,
@@ -130,6 +127,9 @@ def submit_answer(
 
     return NextQuestionIdResponse(next_question_id=next_question.id if next_question else None)
 
+@router.post("/", response_model=QuestionRead, status_code=201)
+def create_question(payload: QuestionCreate):
+    return question_service.create(payload)
 
 @router.post("/bulk", response_model=List[QuestionRead], status_code=201)
 def create_questions_bulk(
@@ -139,3 +139,25 @@ def create_questions_bulk(
     created = question_service.create_bulk(payloads, session)
     return [QuestionRead.from_orm(q) for q in created]
 
+@router.patch(
+    "/{q_id}/isdeleted",
+    response_model=SingleQuestionRead,
+    summary="Toggle the isdeleted flag on a question",
+)
+def update_question_isdeleted(
+    q_id: UUID,
+    payload: IsDeletedPayload,
+    session: Session = Depends(get_db),
+):
+    # fetch or 404
+    question = question_service.get_question_by_id(q_id, session=session)
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    # update flag
+    question.is_deleted = payload.is_deleted
+    session.add(question)
+    session.commit()
+    session.refresh(question)
+
+    return question

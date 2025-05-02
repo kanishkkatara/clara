@@ -154,3 +154,6 @@ QuestionResponse = Union[SingleQuestionRead, CompositeQuestionRead]
 
 class NextQuestionIdResponse(PydanticBase):
     next_question_id: Optional[UUID]
+
+class IsDeletedPayload(PydanticBase):
+    is_deleted: bool

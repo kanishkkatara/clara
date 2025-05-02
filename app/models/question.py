@@ -2,7 +2,7 @@
 # File: app/models/question.py
 # =====================================
 import uuid
-from sqlalchemy import Column, String, Integer, JSON, TIMESTAMP, func, ForeignKey
+from sqlalchemy import Boolean, Column, String, Integer, JSON, TIMESTAMP, func, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID as PGUUID, ARRAY
 from sqlalchemy.orm import relationship
 from app.db import Base
@@ -22,6 +22,8 @@ class Question(Base):
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
     source = Column(String, nullable=True)
+    is_deleted = Column(Boolean, nullable=False, default=False)
+    explanation = Column(String, nullable=True)
 
     children = relationship("Question", back_populates="parent", lazy="selectin", order_by="Question.order")
     parent = relationship("Question", back_populates="children", remote_side=[id])

@@ -12,8 +12,8 @@ class UserMemory(Base):
     user_id    = Column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     message    = Column(String, nullable=False)
     embedding  = Column(Vector(1536), nullable=False)
-    type       = Column(String, nullable=True)  # onboarding, tutoring, etc.
-    source     = Column(String, nullable=True)  # user, assistant
+    type       = Column(String, nullable=True)
+    source     = Column(String, nullable=True)
     importance = Column(Integer, default=1)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
