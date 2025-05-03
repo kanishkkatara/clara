@@ -6,6 +6,7 @@ class UserRead(BaseModel):
     id: UUID
     email: str
     name: Optional[str]
+    isOnboarded: bool
     # picture_url: Optional[str]
 
     class Config:
