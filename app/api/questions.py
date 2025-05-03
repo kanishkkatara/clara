@@ -98,10 +98,10 @@ def submit_answer(
     payload: AnswerCreate,
     session: Session = Depends(get_db),
 ):
-    progress_service.record(payload, session=session)
+    progress_service.record(q_id, payload, session=session)
 
     # Fetch the current question to check if it is part of a composite
-    current_q = question_service.get_question_by_id(payload.question_id, session=session)
+    current_q = question_service.get_question_by_id(q_id, session=session)
 
     next_question = None
 
@@ -120,7 +120,7 @@ def submit_answer(
     if not next_question:
         next_question = recommendation_service.recommend_next(
             user_id=payload.user_id,
-            last_question_id=payload.question_id,
+            last_question_id=q_id,
             is_correct=payload.is_correct,
             session=session,
         )
