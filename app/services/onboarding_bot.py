@@ -1,8 +1,9 @@
 import re
 import json
 import os
-from typing import List
+from typing import List, Optional, Dict, Any
 from uuid import UUID
+
 from openai import OpenAI
 from sqlalchemy.orm import Session
 
@@ -13,6 +14,7 @@ from app.models.user import User
 # Initialize OpenAI client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+
 # --- Generate embeddings
 def get_embedding(text: str) -> List[float]:
     response = client.embeddings.create(
@@ -20,6 +22,7 @@ def get_embedding(text: str) -> List[float]:
         model="text-embedding-ada-002"
     )
     return response.data[0].embedding
+
 
 # --- Fetch onboarding memories chronologically
 def fetch_onboarding_memories(db: Session, user_id: UUID) -> List[UserMemory]:
@@ -33,25 +36,35 @@ def fetch_onboarding_memories(db: Session, user_id: UUID) -> List[UserMemory]:
           .all()
     )
 
-# --- Extract JSON blob for a given key using regex
-def extract_profile(key: str, text: str):
+
+# --- Extract JSON blob for a given key using regex, trimming trailing commas
+def extract_profile(key: str, text: str) -> Optional[Dict[str, Any]]:
     """
     Looks for a pattern like 'key: { ... }' and returns the parsed JSON dict,
     or None if not found or if parsing fails.
     """
-    pattern = re.compile(rf'{re.escape(key)}:\s*(\{{.*?\}})', re.IGNORECASE | re.DOTALL)
+    # match the outer JSON braces for this key, even if nested
+    pattern = re.compile(
+        rf'{re.escape(key)}\s*:\s*(\{{(?:[^{{}}]|\{{|\}})*\}})',
+        re.IGNORECASE | re.DOTALL
+    )
     match = pattern.search(text)
     if not match:
         return None
+
     json_part = match.group(1)
+    # strip any trailing commas before the closing brace
+    cleaned = re.sub(r',\s*}', '}', json_part)
+
     try:
-        return json.loads(json_part)
+        return json.loads(cleaned)
     except json.JSONDecodeError as e:
-        print(f"⚠️ Failed to parse {key}: {e}")
+        print(f"⚠️ Failed to parse {key}: {e}\nCleaned JSON was: {cleaned}")
         return None
 
+
 # --- Build system + chat messages
-def build_onboarding_prompt(memories: List[UserMemory], user_input: str):
+def build_onboarding_prompt(memories: List[UserMemory], user_input: str) -> List[Dict[str, str]]:
     memory_blocks = "\n".join(f"{m.source.upper()}: {m.message}" for m in memories)
 
     system = (
@@ -62,8 +75,6 @@ def build_onboarding_prompt(memories: List[UserMemory], user_input: str):
         "2. target_score (their score goal)\n"
         "3. exam_date (when they plan to take the exam, e.g., \"2025-06-15\")\n"
         "4. previous_score (if any, otherwise explicitly null)\n"
-        "5. weekly_hours (how many hours per week they can study, e.g., \"10-15\")\n"
-        "6. preferred_times (an array of study-time preferences, e.g., [\"Evenings\", \"Weekends\"])\n\n"
         "Do NOT collect these like a form. Instead:\n"
         "- Ask follow-up questions\n"
         "- Reference earlier replies\n"
@@ -75,23 +86,22 @@ def build_onboarding_prompt(memories: List[UserMemory], user_input: str):
         "\"country\": \"India\", "
         "\"target_score\": 720, "
         "\"exam_date\": \"2025-06-15\", "
-        "\"previous_score\": null, "
-        "\"weekly_hours\": \"10-15\", "
-        "\"preferred_times\": [\"Evenings\", \"Weekends\"]"
+        "\"previous_score\": null"
         "}\n\n"
         "If you only have a subset, continue asking and optionally include:\n"
         "partial_profile: {\"country\": \"India\"}\n\n"
         f"Here’s the chat so far:\n{memory_blocks}"
     )
 
-    messages = [{"role": "system", "content": system}]
+    messages: List[Dict[str, str]] = [{"role": "system", "content": system}]
     for m in memories:
         messages.append({"role": m.source, "content": m.message})
     messages.append({"role": "user", "content": user_input})
     return messages
 
+
 # --- Main handler
-async def handle_onboarding(db: Session, user_id: UUID, user_input: str):
+async def handle_onboarding(db: Session, user_id: UUID, user_input: str) -> Dict[str, Any]:
     user = db.query(User).filter(User.id == user_id).first()
     profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
 
@@ -105,8 +115,6 @@ async def handle_onboarding(db: Session, user_id: UUID, user_input: str):
                 f"🎯 Target Score: {profile.target_score or '-'}\n"
                 f"📅 Exam Date: {profile.exam_date or '-'}\n"
                 f"🔙 Previous Score: {profile.previous_score if profile.previous_score is not None else '-'}\n"
-                f"⏱️ Weekly Hours: {profile.weekly_hours or '-'}\n"
-                f"🕒 Preferred Times: {profile.preferred_times or []}\n\n"
                 "Let’s get started with your personalized prep journey!"
             ),
             "snippets_used": [],
@@ -176,7 +184,6 @@ async def handle_onboarding(db: Session, user_id: UUID, user_input: str):
         if parsed is not None:
             parsed_json = parsed
             key_found = key
-            print(f"🔍 Parsed {key_found}: {parsed_json}")
             break
 
     onboarding_complete = False
