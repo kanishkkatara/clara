@@ -5,6 +5,7 @@ from app.api import dashboard, health, questions, settings, users, chat
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://open-prep-fe.vercel.app"
 ]
 
 app = FastAPI(title="Clara API (with Postgres)")
