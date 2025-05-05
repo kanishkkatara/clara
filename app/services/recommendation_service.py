@@ -17,7 +17,7 @@ class RecommendationService:
         session: Session,
     ) -> Optional[QuestionRead]:
         # 1) Fetch the last question
-        last_q = session.query(Question).filter(Question.id == last_question_id).first()
+        last_q = session.query(Question).get(last_question_id)
         if not last_q:
             return None
 
@@ -29,7 +29,21 @@ class RecommendationService:
             session.query(UserQuestionProgress.question_id)
             .filter(UserQuestionProgress.user_id == user_id)
         )
-        base_q = session.query(Question).filter(~Question.id.in_(answered))
+
+        # ➤ New: which IDs are actually parents of others?
+        child_parents = (
+            session.query(Question.parent_id)
+            .filter(Question.parent_id != None)
+        )
+
+        # 3) Base: exclude answered _and_ exclude any parent questions
+        base_q = (
+            session.query(Question)
+            .filter(
+                ~Question.id.in_(answered),
+                ~Question.id.in_(child_parents)
+            )
+        )
 
         candidate = None
 

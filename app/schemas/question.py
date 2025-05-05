@@ -120,13 +120,15 @@ class QuestionRead(QuestionBase):
 class SingleQuestionRead(QuestionBase):
     kind: Literal["single"] = Field("single", alias="kind")
     id: UUID
-    parent_id: Optional[UUID] = Field(None, alias="parentId")
+    parent_id: Optional[UUID] = Field(None, alias="parent_id")
     order: Optional[int] = None
     created_at: datetime
     updated_at: datetime
     parent: Optional[QuestionRead] = None
+    is_deleted: bool = Field(False, alias="is_deleted")
 
 # --- Composite question response schema ---
+# TODO: remove/fix this
 class CompositeQuestionRead(PydanticBase):
     kind: Literal["composite"] = Field("composite", alias="kind")
     group_id: UUID = Field(..., alias="groupId")

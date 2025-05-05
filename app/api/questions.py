@@ -69,6 +69,7 @@ def get_question(
                 parent_id=question.parent_id,
                 created_at=question.created_at,
                 updated_at=question.updated_at,
+                is_deleted=question.is_deleted,
                 parent=parent_q
             )
 
@@ -86,6 +87,7 @@ def get_question(
             parent_id=question.parent_id,
             created_at=question.created_at,
             updated_at=question.updated_at,
+            is_deleted=question.is_deleted,
             parent=None
         )
 

@@ -82,7 +82,7 @@ class DashboardService:
         category_type_map = {
             'quantitative': ['problem-solving'],
             'verbal': ['reading-comprehension', 'critical-reasoning'],
-            'di': ['data-sufficiency', 'table-analysis', 'graphical-interpretation', 'two-part-analysis', 'multi-source-reasoning'],
+            'di': ['data-sufficiency', 'table-analysis', 'graphics-interpretation', 'two-part-analysis', 'multi-source-reasoning'],
         }
 
         stats: dict[str, int] = {}
