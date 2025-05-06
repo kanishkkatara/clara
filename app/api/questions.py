@@ -6,6 +6,7 @@ from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
 from app.db import get_db
+from app.models.question import Question
 from app.schemas.progress import AnswerCreate
 from app.schemas.question import (
     IsDeletedPayload,
@@ -14,6 +15,7 @@ from app.schemas.question import (
     QuestionRead,
     QuestionSummaryRead,
     QuestionResponse,
+    QuestionUpdate,
     SingleQuestionRead,
 )
 from app.services.auth import get_current_user
@@ -163,3 +165,30 @@ def update_question_isdeleted(
     session.refresh(question)
 
     return question
+
+@router.get("/update/{question_id}", response_model=QuestionRead)
+def get_question(question_id: UUID, db: Session = Depends(get_db)):
+    print("get_question", question_id)
+    q = db.query(Question).get(question_id)
+    print("--> get_question", q)
+    if not q:
+        raise HTTPException(404, "Question not found")
+    return q
+
+@router.patch("/update/{question_id}", response_model=QuestionRead)
+def update_question(
+    question_id: UUID,
+    payload: QuestionUpdate,
+    db: Session = Depends(get_db),
+):
+    q = db.query(Question).filter(Question.id == question_id).first()
+    if not q:
+        raise HTTPException(404, "Question not found")
+
+    # only update provided fields
+    for key, val in payload.dict(exclude_unset=True).items():
+        setattr(q, key, val)
+
+    db.commit()
+    db.refresh(q)
+    return q

@@ -159,3 +159,17 @@ class NextQuestionIdResponse(PydanticBase):
 
 class IsDeletedPayload(PydanticBase):
     is_deleted: bool
+
+class QuestionUpdate(PydanticBase):
+    # NOTE: extend PydanticBase so you inherit its alias/config behavior
+    type:        Optional[str]               = None
+    content:     Optional[List[ContentBlock]] = None
+    options:     Optional[List[Option]]      = None
+    answers:     Optional[AnswerSchema]      = None
+    tags:        Optional[List[str]]         = None
+    difficulty:  Optional[int]               = None
+    parent_id:   Optional[UUID]              = Field(None, alias="parentId")
+    order:       Optional[int]               = None
+    source:      Optional[str]               = None
+
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
