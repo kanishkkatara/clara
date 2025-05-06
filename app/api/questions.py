@@ -13,6 +13,7 @@ from app.schemas.question import (
     NextQuestionIdResponse,
     QuestionCreate,
     QuestionRead,
+    QuestionReadRaw,
     QuestionSummaryRead,
     QuestionResponse,
     QuestionUpdate,
@@ -166,16 +167,14 @@ def update_question_isdeleted(
 
     return question
 
-@router.get("/update/{question_id}", response_model=QuestionRead)
+@router.get("/update/{question_id}", response_model=QuestionReadRaw)
 def get_question(question_id: UUID, db: Session = Depends(get_db)):
-    print("get_question", question_id)
     q = db.query(Question).get(question_id)
-    print("--> get_question", q)
     if not q:
         raise HTTPException(404, "Question not found")
     return q
 
-@router.patch("/update/{question_id}", response_model=QuestionRead)
+@router.patch("/update/{question_id}", response_model=QuestionReadRaw)
 def update_question(
     question_id: UUID,
     payload: QuestionUpdate,

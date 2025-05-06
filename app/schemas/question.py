@@ -116,6 +116,15 @@ class QuestionRead(QuestionBase):
     created_at: datetime
     updated_at: datetime
 
+class QuestionReadRaw(QuestionBase):
+    kind: Literal["single"] = Field("single", alias="kind")
+    id: UUID
+    parent_id: Optional[UUID] = Field(None, alias="parentId")
+    order: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+    source: Optional[str] = None
+
 # --- Full response schema for standalone single questions ---
 class SingleQuestionRead(QuestionBase):
     kind: Literal["single"] = Field("single", alias="kind")
