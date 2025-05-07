@@ -130,6 +130,7 @@ class QuestionService:
             answers=payload.answers.model_dump(),
             tags=payload.tags,
             difficulty=payload.difficulty,
+            extras=payload.extras,
             parent_id=payload.parent_id,
             order=payload.order,
             source=payload.source
@@ -160,6 +161,7 @@ class QuestionService:
                     answers={},  # Composite parents have no answers
                     tags=payload.tags,
                     difficulty=payload.difficulty,
+                    extras=payload.extras,
                     parent_id=None,
                     order=None,
                     source=payload.source
@@ -181,6 +183,7 @@ class QuestionService:
                     answers=payload.answers.model_dump(),
                     tags=payload.tags,
                     difficulty=payload.difficulty,
+                    extras=payload.extras,
                     parent_id=payload.parent_id,
                     order=payload.order,
                     source=payload.source
@@ -199,6 +202,7 @@ class QuestionService:
     def get_question_by_id(self, qid: UUID, session: Session) -> Question:
         stmt = select(Question).where(Question.id == qid)
         result = session.execute(stmt).scalar_one_or_none()
+        print(f"--> Question ID: {qid}, Result: {result}, extras: {result.extras}")
         if not result:
             raise KeyError(f"Question {qid} not found")
         return result

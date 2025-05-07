@@ -101,6 +101,7 @@ class QuestionBase(PydanticBase):
     answers: AnswerSchema
     tags: List[str] = Field(default_factory=list)
     difficulty: int = Field(1, ge=1, le=7)
+    extras: Dict[str, Any] = Field(default_factory=dict)
 
 class QuestionCreate(QuestionBase):
     parent_id: Optional[UUID] = None

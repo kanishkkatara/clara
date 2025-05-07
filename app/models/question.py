@@ -3,7 +3,7 @@
 # =====================================
 import uuid
 from sqlalchemy import Boolean, Column, String, Integer, JSON, TIMESTAMP, func, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID as PGUUID, ARRAY
+from sqlalchemy.dialects.postgresql import UUID as PGUUID, ARRAY, JSONB
 from sqlalchemy.orm import relationship
 from app.db import Base
 
@@ -19,6 +19,7 @@ class Question(Base):
     answers = Column(JSON, nullable=False, server_default="{}")
     tags = Column(ARRAY(String), nullable=False, server_default="{}")
     difficulty = Column(Integer, nullable=False, server_default="1")
+    extras = Column(JSONB, nullable=False, server_default='{}')
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
     source = Column(String, nullable=True)
