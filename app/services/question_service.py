@@ -202,7 +202,6 @@ class QuestionService:
     def get_question_by_id(self, qid: UUID, session: Session) -> Question:
         stmt = select(Question).where(Question.id == qid)
         result = session.execute(stmt).scalar_one_or_none()
-        print(f"--> Question ID: {qid}, Result: {result}, extras: {result.extras}")
         if not result:
             raise KeyError(f"Question {qid} not found")
         return result

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import dashboard, health, questions, settings, users, chat
+from app.api import billing, dashboard, health, questions, settings, users, chat
 
 origins = [
     "http://localhost:5173",
@@ -26,6 +26,7 @@ app.include_router(users.router, prefix="/api/users")
 app.include_router(chat.router, prefix="/api/chat")
 app.include_router(dashboard.router, prefix="/api/dashboard")
 app.include_router(settings.router, prefix="/api/settings")
+app.include_router(billing.router, prefix="/api/billing")
 
 @app.get("/")
 async def read_root():

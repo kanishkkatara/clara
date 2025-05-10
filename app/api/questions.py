@@ -26,7 +26,7 @@ from app.services.recommendation_service import recommendation_service
 
 router = APIRouter()
 
-@router.get("/", response_model=List[QuestionSummaryRead])
+@router.get("", response_model=List[QuestionSummaryRead])
 def list_questions(
     type: Optional[List[str]] = Query(None),
     tags: Optional[List[str]] = Query(None),
@@ -134,7 +134,7 @@ def submit_answer(
 
     return NextQuestionIdResponse(next_question_id=next_question.id if next_question else None)
 
-@router.post("/", response_model=QuestionRead, status_code=201)
+@router.post("", response_model=QuestionRead, status_code=201)
 def create_question(payload: QuestionCreate):
     return question_service.create(payload)
 

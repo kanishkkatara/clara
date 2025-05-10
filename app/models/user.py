@@ -22,4 +22,5 @@ class User(Base):
 
     profile       = relationship("UserProfile", back_populates="user", uselist=False)
     memories      = relationship("UserMemory", back_populates="user")
+    subscriptions = relationship("Subscription", back_populates="user")
 
