@@ -14,9 +14,11 @@ router = APIRouter()
 class BasicSettings(BaseModel):
     name: str
     email: EmailStr
+    country: Optional[str] = None
     target_score: Optional[int] = None
     exam_date: Optional[date] = None
     previous_score: Optional[int] = None
+    onboarding_complete: bool = True
 
 class DisplaySettings(BaseModel):
     dark_mode: bool
@@ -28,13 +30,28 @@ class NotificationSettings(BaseModel):
 @router.get("/basic", response_model=BasicSettings)
 def get_basic(user: User = Depends(get_current_user)):
     p = user.profile
-    try:
-        exam_date = p.exam_date and date.fromisoformat(p.exam_date)
-    except ValueError:
-        exam_date = None
+
+    if not p:
+        return BasicSettings(
+            name=user.name,
+            email=user.email,
+            country=None,
+            target_score=None,
+            exam_date=None,
+            previous_score=None,
+        )
+
+    exam_date = None
+    if p.exam_date:
+        try:
+            exam_date = date.fromisoformat(p.exam_date)
+        except ValueError:
+            exam_date = None
+
     return BasicSettings(
         name=user.name,
         email=user.email,
+        country=p.country,
         target_score=p.target_score,
         exam_date=exam_date,
         previous_score=p.previous_score,
@@ -51,9 +68,11 @@ def update_basic(
 
     # ensure profile exists
     profile = user.profile or UserProfile(user_id=user.id)
+    profile.country        = settings.country
     profile.target_score   = settings.target_score
     profile.exam_date      = settings.exam_date.isoformat() if settings.exam_date else None
     profile.previous_score = settings.previous_score
+    profile.onboarding_complete = settings.onboarding_complete
     session.add(user)
     session.add(profile)
     session.commit()

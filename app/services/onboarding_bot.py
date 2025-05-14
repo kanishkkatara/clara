@@ -16,7 +16,6 @@ from app.models.user import User
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
-# --- Generate embeddings
 def get_embedding(text: str) -> List[float]:
     response = client.embeddings.create(
         input=text,
@@ -25,7 +24,6 @@ def get_embedding(text: str) -> List[float]:
     return response.data[0].embedding
 
 
-# --- Fetch onboarding memories chronologically
 def fetch_onboarding_memories(db: Session, user_id: UUID) -> List[UserMemory]:
     return (
         db.query(UserMemory)
@@ -38,31 +36,16 @@ def fetch_onboarding_memories(db: Session, user_id: UUID) -> List[UserMemory]:
     )
 
 
-# --- Extract JSON blob for a given key using regex, trimming trailing commas
-def extract_profile(key: str, text: str) -> Optional[Dict[str, Any]]:
-    """
-    Looks for a pattern like 'key: { ... }' and returns the parsed JSON dict,
-    or None if not found or if parsing fails.
-    """
-    pattern = re.compile(
-        rf'{re.escape(key)}\s*:\s*(\{{(?:[^{{}}]|\{{|\}})*\}})',
-        re.IGNORECASE | re.DOTALL
-    )
-    match = pattern.search(text)
+def extract_updated_fields(text: str) -> Optional[Dict[str, Any]]:
+    match = re.search(r'updated_fields\s*:\s*(\{.*?\})', text, re.DOTALL)
     if not match:
         return None
-
-    json_part = match.group(1)
-    cleaned = re.sub(r',\s*}', '}', json_part)
-
     try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError as e:
-        print(f"⚠️ Failed to parse {key}: {e}\nCleaned JSON was: {cleaned}")
+        return json.loads(match.group(1))
+    except json.JSONDecodeError:
         return None
 
 
-# --- Build system + chat messages
 def build_onboarding_prompt(memories: List[UserMemory], user_input: str) -> List[Dict[str, str]]:
     memory_blocks = "\n".join(f"{m.source.upper()}: {m.message}" for m in memories)
     today_str = datetime.date.today().strftime("%Y-%m-%d")
@@ -72,31 +55,18 @@ def build_onboarding_prompt(memories: List[UserMemory], user_input: str) -> List
         "Your job:\n"
         "- Collect these 4 fields naturally: country, target_score, exam_date, previous_score.\n"
         "- NEVER generate long explanations or general facts. Replies should be short, crisp, and conversational.\n"
-        "- If the user gives a vague or incomplete answer, assume and IMMEDIATELY register a reasonable value in partial_profile. Proceed without waiting for confirmation.\n"
-        "- If the user later disagrees or provides a different value, update the partial_profile accordingly.\n"
-        "- If the user does not answer the current question directly or changes the topic, assume a reasonable value and proceed without re-asking.\n"
-        "- When assuming a date, always pick a FUTURE date (today or later).\n"
+        "- Assume reasonable values if vague or missing, and proceed without asking again.\n"
+        "- Always pick a FUTURE date when assuming exam_date.\n"
         f"- Assume today's date is {today_str}.\n"
-        "- Once a field is captured or assumed, never ask about it again.\n"
-        "- Every reply should either ask a follow-up question or confirm progress, so the user always has something to respond to. Continue this until all 4 fields are captured.\n"
-        "- Use light, friendly confirmations like 'Got it!' or 'Sounds good!' instead of repeating the user's response fully.\n"
-        "- Use the user's name once mid-conversation to make it feel personal.\n"
-        "- ALWAYS include the updated partial_profile after each new field is captured or assumed.\n"
-        "- Finish collecting one field fully before moving to the next.\n"
-        "- Use a warm and friendly tone, avoid filler text or generic commentary.\n\n"
-        "Once all 4 fields are known or assumed, even if any field is null, summarize them exactly like this:\n"
-        "final_profile: {"
-        "\"exam\": \"GMAT\", "
-        "\"country\": \"India\", "
-        "\"target_score\": 720, "
-        "\"exam_date\": \"2025-06-15\", "
-        "\"previous_score\": null"
-        "}\n\n"
-        "If only some fields are known, include:\n"
-        "partial_profile: {\"country\": \"India\"}\n\n"
+        "- Confirm or assume one field per message and include it in the updated_fields block.\n"
+        "- updated_fields must include only newly captured or changed fields.\n"
+        "- Example:\n"
+        "  Sure! I've set your target score to 710. When are you planning to take the test?\n"
+        "  updated_fields: {\"target_score\": 710}\n"
+        "- Never return partial_profile or final_profile.\n"
+        "- Be warm and human.\n\n"
         f"Here’s the chat so far:\n{memory_blocks}"
     )
-
 
     messages: List[Dict[str, str]] = [{"role": "system", "content": system}]
     for m in memories:
@@ -105,28 +75,52 @@ def build_onboarding_prompt(memories: List[UserMemory], user_input: str) -> List
     return messages
 
 
-# --- Main handler
-async def handle_onboarding(db: Session, user_id: UUID, user_input: str) -> Dict[str, Any]:
+async def handle_onboarding(
+    db: Session,
+    user_id: UUID,
+    user_input: str,
+    profile_data: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     user = db.query(User).filter(User.id == user_id).first()
     profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
 
-    if profile and profile.onboarding_complete:
-        first_name = user.name.split()[0] if user and user.name else "friend"
-        return {
-            "reply": (
-                f"You're all set, {first_name}! 🎉\n\n"
-                f"🌍 Country: {profile.country or '-'}\n"
-                f"🎯 Target Score: {profile.target_score or '-'}\n"
-                f"📅 Exam Date: {profile.exam_date or '-'}\n"
-                f"🔙 Previous Score: {profile.previous_score if profile.previous_score is not None else '-'}\n"
-                "Let’s get started with your personalized prep journey!"
-            ),
-            "snippets_used": [],
-            "onboarding_complete": True
+    updated_fields = {}
+
+    # Update name/email on User if provided
+    if profile_data:
+        if "name" in profile_data and user:
+            user.name = profile_data["name"]
+            updated_fields["name"] = user.name
+        if "email" in profile_data and user:
+            user.email = profile_data["email"]
+            updated_fields["email"] = user.email
+        db.commit()
+
+        # Persist additional profile fields
+        field_map = {
+            "country": "country",
+            "targetScore": "target_score",
+            "examDate": "exam_date",
+            "previousScore": "previous_score"
+        }
+        mapped = {
+            field_map[k]: v
+            for k, v in profile_data.items()
+            if k in field_map and v is not None
         }
 
-    # Initial greeting
-    if user_input.lower() in ["__init__"]:
+        if mapped:
+            if profile:
+                for attr, value in mapped.items():
+                    setattr(profile, attr, value)
+                    updated_fields[attr] = value
+            else:
+                profile = UserProfile(user_id=user_id, **mapped)
+                db.add(profile)
+                updated_fields.update(mapped)
+            db.commit()
+
+    if user_input.lower() == "__init__":
         first_name = user.name.split()[0] if user and user.name else "there"
         welcome = (
             f"Hey {first_name}! 👋 I’m Clara, your GMAT prep buddy. "
@@ -144,7 +138,7 @@ async def handle_onboarding(db: Session, user_id: UUID, user_input: str) -> Dict
         return {
             "reply": welcome,
             "snippets_used": [],
-            "onboarding_complete": False
+            "profile": updated_fields
         }
 
     # Store user message
@@ -158,7 +152,7 @@ async def handle_onboarding(db: Session, user_id: UUID, user_input: str) -> Dict
     ))
     db.commit()
 
-    # Build the prompt and call OpenAI
+    # Call the LLM
     memories = fetch_onboarding_memories(db, user_id)
     messages = build_onboarding_prompt(memories, user_input)
     chat = client.chat.completions.create(
@@ -179,54 +173,22 @@ async def handle_onboarding(db: Session, user_id: UUID, user_input: str) -> Dict
     ))
     db.commit()
 
-    # Parse out final_profile or partial_profile
-    parsed_json = None
-    key_found = None
-    for key in ["final_profile", "partial_profile"]:
-        parsed = extract_profile(key, reply_text)
-        if parsed is not None:
-            parsed_json = parsed
-            key_found = key
-            break
-
-    onboarding_complete = False
-
+    # Parse updated_fields
+    parsed_json = extract_updated_fields(reply_text)
     if parsed_json:
-        if key_found == "final_profile":
-            onboarding_complete = True
-
-        # ✅ Second-level check
-        if key_found == "partial_profile" and parsed_json:
-            has_all_fields = all([
-                "country" in parsed_json,
-                "target_score" in parsed_json,
-                "exam_date" in parsed_json,
-                "previous_score" in parsed_json
-            ])
-            if has_all_fields:
-                onboarding_complete = True
-
-        # ✅ Persist both final and partial profile fields
-        if profile:
-            for k, v in parsed_json.items():
-                setattr(profile, k, v)
-            if onboarding_complete:
-                profile.onboarding_complete = True
-        else:
-            db.add(UserProfile(
-                user_id=user_id,
-                onboarding_complete=onboarding_complete,
-                **parsed_json
-            ))
+        if not profile:
+            profile = UserProfile(user_id=user_id)
+            db.add(profile)
+        for k, v in parsed_json.items():
+            setattr(profile, k, v)
+            updated_fields[k] = v
         db.commit()
 
-    cleaned_reply = re.sub(
-        r'(partial_profile|final_profile)\s*:\s*\{[^}]*\}\s*', '', reply_text
-    ).strip()
-
+    # Clean reply text
+    cleaned = re.sub(r'updated_fields\s*:\s*\{[^}]*\}\s*', '', reply_text).strip()
 
     return {
-        "reply": cleaned_reply,
+        "reply": cleaned,
         "snippets_used": [m.message for m in memories],
-        "onboarding_complete": onboarding_complete
+        "profile": updated_fields
     }
