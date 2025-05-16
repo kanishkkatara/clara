@@ -14,7 +14,7 @@ from app.models.user import User
 # load from env
 SECRET_KEY      = os.getenv("SECRET_KEY", "your-dev-secret")
 ALGORITHM       = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 1 week
 GOOGLE_CLIENT_ID= os.getenv("GOOGLE_CLIENT_ID")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/users/login")

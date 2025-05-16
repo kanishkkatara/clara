@@ -82,7 +82,7 @@ def build_tutoring_prompt(
         q_obj = context.get("question")
         p_obj = context.get("parent")
 
-        if q_obj:
+        if q_obj:   # TODO: handle question type wise
             q_text = extract_text(q_obj)
             system += f"Current question:\n\"\"\"\n{q_text}\n\"\"\"\n\n"
             opts = getattr(q_obj, "options", None)
@@ -92,6 +92,7 @@ def build_tutoring_prompt(
                     oid = opt.get("id", "")
                     otext = extract_text(opt)
                     system += f"- {oid}: {otext}\n"
+                system += f"Correct answer: {q_obj.answers}\n"
                 system += "\n"
 
         if p_obj:
@@ -140,7 +141,7 @@ async def handle_tutoring(
     snippets_used: List[str] = []
 
     # C) Check for cached explanation
-    if user_input.strip().lower().startswith("please explain") and q_obj and q_obj.explanation:
+    if user_input.strip().lower().startswith("please explain this question.") and q_obj and q_obj.explanation:
         reply = q_obj.explanation
     else:
         # D) Retrieve full UserMemory objects and build the prompt
