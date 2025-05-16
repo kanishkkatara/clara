@@ -1,6 +1,6 @@
 from typing import List
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 from app.models.profile import UserProfile
 from app.models.progress import UserQuestionProgress
 from app.models.question import Question
@@ -73,8 +73,8 @@ class DashboardService:
 
     def get_overall_progress(self) -> OverallSchema:
         """
-        Compute percent‐correct per category by filtering on Question.type,
-        then return each percentage along with their average.
+        Compute percent-correct per category by resolving parent question type
+        (for composite children) and then calculating per-category completion.
         """
         user_id = self.user.id
 
@@ -87,39 +87,43 @@ class DashboardService:
 
         stats: dict[str, int] = {}
 
-        for category, types in category_type_map.items():        
-            # total available in this category
+        parent = aliased(Question)
+
+        for category, types in category_type_map.items():
+            # Total questions available for the category (considering parent types)
             total_cat = (
                 self.session.query(func.count(Question.id))
-                .filter(Question.type.in_(types))
+                .outerjoin(parent, Question.parent_id == parent.id)
+                .filter(
+                    func.coalesce(parent.type, Question.type).in_(types)
+                )
                 .scalar()
                 or 1
             )
-            # total user has completed in this category
+
+            # Total completed questions by user in this category
             completed_cat = (
                 self.session.query(func.count(UserQuestionProgress.id))
                 .join(Question, Question.id == UserQuestionProgress.question_id)
+                .outerjoin(parent, Question.parent_id == parent.id)
                 .filter(
                     UserQuestionProgress.user_id == user_id,
-                    Question.type.in_(types)
+                    func.coalesce(parent.type, Question.type).in_(types)
                 )
                 .scalar()
                 or 0
             )
+
             stats[category] = int(completed_cat / total_cat * 100)
 
-        # Compute an overall average across categories
-                # 1) overall completed / total
+        # Overall progress
         total_questions = (
-            self.session.query(func.count(Question.id))
-            .scalar()
-            or 1
+            self.session.query(func.count(Question.id)).scalar() or 1
         )
         total_completed = (
             self.session.query(func.count(UserQuestionProgress.id))
             .filter(UserQuestionProgress.user_id == user_id)
-            .scalar()
-            or 0
+            .scalar() or 0
         )
         stats['overall'] = int(total_completed / total_questions * 100)
 
